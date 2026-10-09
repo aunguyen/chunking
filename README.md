@@ -2,6 +2,13 @@
 
 Web app chạy local để luyện chunking tiếng Anh. Không cần cài đặt.
 
+## Dùng trên iPhone (hoặc bất kỳ máy nào)
+
+Mở **https://aunguyen.github.io/chunking/** bằng Safari → nút **Chia sẻ** → **Thêm vào MH chính** để có biểu tượng app.
+
+- Tiến độ trên iPhone lưu riêng trong Safari của iPhone. Muốn chuyển dữ liệu từ Mac: trên Mac bấm **Tải file sao lưu** → AirDrop sang iPhone → trên iPhone bấm **Khôi phục từ file**.
+- Không nghe thấy giọng đọc? Kiểm tra nút gạt im lặng và âm lượng.
+
 ## Mở app
 
 **Cách 1 — nhanh nhất:** mở thẳng file `index.html` bằng Chrome / Safari / Edge (double-click).
