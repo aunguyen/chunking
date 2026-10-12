@@ -236,17 +236,128 @@
         ["what will", "what'll", "whatll"],
         ["will not", "won't", "wont"]
       ]
+    },
+    {
+      id: "would", title: "Cụm đi với would", note: "'d luôn hiểu là would (không phải had)", groups: [
+        ["i would", "i'd", "id"],
+        ["you would", "you'd", "youd"],
+        ["he would", "he'd", "hed"],
+        ["she would", "she'd"],
+        ["it would", "it'd", "itd"],
+        ["we would", "we'd"],
+        ["they would", "they'd", "theyd"],
+        ["there would", "there'd", "thered"],
+        ["that would", "that'd", "thatd"],
+        ["who would", "who'd", "whod"],
+        ["would not", "wouldn't", "wouldnt"]
+      ]
+    },
+    {
+      id: "have", title: "Cụm đi với have", groups: [
+        ["i have", "i've", "ive"],
+        ["you have", "you've", "youve"],
+        ["we have", "we've", "weve"],
+        ["they have", "they've", "theyve"],
+        ["who have", "who've", "whove"],
+        ["could have", "could've", "couldve"],
+        ["should have", "should've", "shouldve"],
+        ["would have", "would've", "wouldve"],
+        ["might have", "might've", "mightve"],
+        ["must have", "must've", "mustve"],
+        ["have not", "haven't", "havent"],
+        ["has not", "hasn't", "hasnt"],
+        ["had not", "hadn't", "hadnt"]
+      ]
+    },
+    {
+      id: "be", title: "Cụm đi với be (am / is / are)", note: "'s luôn hiểu là is (không phải has)", groups: [
+        ["i am", "i'm", "im"],
+        ["you are", "you're", "youre"],
+        ["we are", "we're"],
+        ["they are", "they're", "theyre"],
+        ["he is", "he's", "hes"],
+        ["she is", "she's", "shes"],
+        ["it is", "it's"],
+        ["that is", "that's", "thats"],
+        ["there is", "there's", "theres"],
+        ["here is", "here's", "heres"],
+        ["what is", "what's", "whats"],
+        ["who is", "who's", "whos"],
+        ["where is", "where's", "wheres"],
+        ["how is", "how's", "hows"],
+        ["is not", "isn't", "isnt"],
+        ["are not", "aren't", "arent"],
+        ["was not", "wasn't", "wasnt"],
+        ["were not", "weren't", "werent"]
+      ]
+    },
+    {
+      id: "not", title: "Phủ định (not)", groups: [
+        ["do not", "don't", "dont"],
+        ["does not", "doesn't", "doesnt"],
+        ["did not", "didn't", "didnt"],
+        ["can not", "cannot", "can't", "cant"],
+        ["could not", "couldn't", "couldnt"],
+        ["should not", "shouldn't", "shouldnt"],
+        ["must not", "mustn't", "mustnt"],
+        ["need not", "needn't", "neednt"],
+        ["might not", "mightn't", "mightnt"],
+        ["shall not", "shan't", "shant"]
+      ]
+    },
+    {
+      id: "numbers", title: "Số viết bằng chữ / bằng số", groups: [
+        ["1", "one"], ["2", "two"], ["3", "three"], ["4", "four"], ["5", "five"],
+        ["6", "six"], ["7", "seven"], ["8", "eight"], ["9", "nine"], ["10", "ten"],
+        ["11", "eleven"], ["12", "twelve"], ["13", "thirteen"], ["14", "fourteen"], ["15", "fifteen"],
+        ["16", "sixteen"], ["17", "seventeen"], ["18", "eighteen"], ["19", "nineteen"], ["20", "twenty"],
+        ["30", "thirty"], ["40", "forty"], ["50", "fifty"], ["60", "sixty"], ["70", "seventy"],
+        ["80", "eighty"], ["90", "ninety"], ["100", "a hundred", "one hundred"]
+      ]
+    },
+    {
+      id: "uk-us", title: "Từ Anh – Mỹ", defaultOff: true, groups: [
+        ["vacation", "holiday"], ["vacations", "holidays"],
+        ["movie", "film"], ["movies", "films"],
+        ["apartment", "flat"], ["apartments", "flats"],
+        ["mom", "mum"],
+        ["store", "shop"], ["stores", "shops"],
+        ["garbage", "rubbish", "trash"],
+        ["cookie", "biscuit"], ["cookies", "biscuits"],
+        ["truck", "lorry"],
+        ["soccer", "football"],
+        ["elevator", "lift"],
+        ["subway", "underground"],
+        ["candy", "sweets"],
+        ["cell phone", "mobile phone"]
+      ]
+    },
+    {
+      id: "spoken", title: "Văn nói", defaultOff: true, groups: [
+        ["going to", "gonna"],
+        ["want to", "wanna"],
+        ["got to", "gotta"],
+        ["kind of", "kinda"]
+      ]
     }
   ];
+  // Bật / tắt từng chủ đề: equiv-state = { id: true|false }; chưa chỉnh thì theo mặc định của chủ đề
+  function topicOn(t) {
+    const state = store.get("equiv-state", null);
+    if (state && t.id in state) return !!state[t.id];
+    if (store.get("equiv-off", []).includes(t.id)) return false; // dữ liệu bản cũ
+    return !t.defaultOff;
+  }
+  function setTopic(id, on) {
+    const state = store.get("equiv-state", {});
+    state[id] = on;
+    store.set("equiv-state", state);
+  }
   // 2) Danh sách của người học (tự sửa trên trang Từ tương đương)
   const DEFAULT_EQUIV = [
     "# Mỗi dòng một nhóm, các cách viết cách nhau bằng dấu =",
     "# Dòng bắt đầu bằng # là ghi chú, app bỏ qua.",
-    "he is = he's = hes",
-    "she is = she's = shes",
-    "we have = we've = weve",
-    "they have = they've = theyve",
-    "you have = you've = youve"
+    "# Ví dụ: kids = children"
   ].join("\n");
   function parseEquiv(text) {
     const groups = [], problems = [];
@@ -260,8 +371,7 @@
     return { groups, problems };
   }
   function applyEquiv() {
-    const off = new Set(store.get("equiv-off", []));
-    const builtin = BUILTIN_EQUIV.filter(t => !off.has(t.id)).flatMap(t => t.groups);
+    const builtin = BUILTIN_EQUIV.filter(topicOn).flatMap(t => t.groups);
     Grader.setEquivalences(builtin.concat(parseEquiv(store.get("equiv", DEFAULT_EQUIV)).groups));
   }
   applyEquiv();
@@ -1981,7 +2091,6 @@
   function renderEquiv() {
     document.title = "Từ tương đương · Chunking";
     const saved = store.get("equiv", DEFAULT_EQUIV);
-    const off = new Set(store.get("equiv-off", []));
     app.innerHTML = `
       <button class="back" id="eq-back">${icon("arrowLeft")} Quay lại</button>
       <h1 class="page-title">Từ tương đương</h1>
@@ -1990,7 +2099,8 @@
         <div class="box-head"><h2>Bộ có sẵn</h2><span class="hint">Claude soạn sẵn, tự cập nhật — bật / tắt từng chủ đề</span></div>
         ${BUILTIN_EQUIV.map(t => `
           <div class="topic">
-            <label class="switch"><input type="checkbox" data-topic="${t.id}"${off.has(t.id) ? "" : " checked"}> <b>${esc(t.title)}</b> <span class="muted">${t.groups.length} nhóm</span></label>
+            <label class="switch"><input type="checkbox" data-topic="${t.id}"${topicOn(t) ? " checked" : ""}> <b>${esc(t.title)}</b> <span class="muted">${t.groups.length} nhóm${t.defaultOff ? " · mặc định tắt" : ""}</span></label>
+            ${t.note ? `<div class="topic-note">${esc(t.note)}</div>` : ""}
             <details><summary>Xem danh sách</summary>
               <ul class="topic-list">${t.groups.map(g => `<li><code>${g.map(esc).join(" = ")}</code></li>`).join("")}</ul>
             </details>
@@ -2033,8 +2143,7 @@
     });
     app.querySelector("#eq-back").addEventListener("click", () => { if (history.length > 1) history.back(); else location.hash = "#/"; });
     app.querySelectorAll("[data-topic]").forEach(cb => cb.addEventListener("change", () => {
-      if (cb.checked) off.delete(cb.dataset.topic); else off.add(cb.dataset.topic);
-      store.set("equiv-off", [...off]);
+      setTopic(cb.dataset.topic, cb.checked);
       applyEquiv();
       loadChunks();
       const t = BUILTIN_EQUIV.find(x => x.id === cb.dataset.topic);
