@@ -1640,7 +1640,23 @@
       store.set("sum-range", range);
       draw();
     });
+    function saveGoal() {
+      const v = parseInt(body.querySelector("#goal-input").value, 10);
+      if (!(v >= 5 && v <= 720)) return toast("Nhập từ 5 đến 720 phút");
+      store.set("daily-goal", v);
+      draw();
+    }
+    body.addEventListener("keydown", e => { if (e.target.id === "goal-input" && e.key === "Enter") saveGoal(); });
     body.addEventListener("click", e => {
+      const g = e.target.closest("[data-goal]");
+      if (g) {
+        if (g.dataset.goal !== "custom") { store.set("daily-goal", +g.dataset.goal); return draw(); }
+        const box = body.querySelector("#goal-custom");
+        box.hidden = !box.hidden;
+        if (!box.hidden) body.querySelector("#goal-input").select();
+        return;
+      }
+      if (e.target.closest("#goal-save")) return saveGoal();
       if (e.target.closest("[data-toggle-table]")) {
         const t = body.querySelector(".data-table");
         t.hidden = !t.hidden;
@@ -1676,7 +1692,7 @@
           <div class="stat"><small>Chuỗi dài nhất</small><b>${longestStreak(days)}</b><span> ngày</span></div>
         </section>
         ${chartHtml(keys, totalMs)}
-        ${heatHtml()}
+        ${calendarHtml()}
         ${tableHtml(keys)}
         <p class="sum-note">${first ? `Thời gian học được ghi lại từ ngày ${ddmm(parseDay(first))}.` : "Thời gian học sẽ được ghi lại từ lần luyện tiếp theo."}
           Chỉ tính lúc bạn đang luyện (có thao tác trong 60 giây gần nhất hoặc đang phát audio).</p>`;
@@ -1749,28 +1765,41 @@
         </section>`;
     }
 
-    function heatHtml() {
-      const WEEKS = 12, now = new Date(), todayKey = today();
-      const start = addDays(now, -((now.getDay() + 6) % 7) - 7 * (WEEKS - 1)); // thứ Hai của 12 tuần trước
-      const level = ms => (ms <= 0 ? 0 : ms < 5 * 60000 ? 1 : ms < 15 * 60000 ? 2 : ms < 30 * 60000 ? 3 : 4);
-      let html = '<span class="ml"></span>' + ["T2", "", "T4", "", "T6", "", "CN"].map(l => `<span class="dl">${l}</span>`).join("");
-      for (let w = 0; w < WEEKS; w++) {
-        const ws = addDays(start, w * 7);
-        const newMonth = w === 0 || ws.getMonth() !== addDays(ws, -7).getMonth();
-        html += `<span class="ml">${newMonth ? `Th ${ws.getMonth() + 1}` : ""}</span>`;
-        for (let i = 0; i < 7; i++) {
-          const d = addDays(ws, i), k = today(d);
-          if (k > todayKey) { html += '<i class="hc future"></i>'; continue; }
-          const ms = dayOf(k).tr + dayOf(k).ls;
-          html += `<i class="hc l${level(ms)}${k === todayKey ? " is-today" : ""}" data-tip="<b>${WEEKDAY[d.getDay()]}, ${ddmm(d)}</b><br>${ms ? fmtDur(ms) : "Không học"}"></i>`;
+    // Lịch học theo tháng: mỗi ô dâng màu từ đáy lên theo % mục tiêu mỗi ngày; đạt đủ thì xanh đậm
+    const GOALS = [[30, "30p"], [60, "1g"], [90, "1g30"], [120, "2g"], [180, "3g"]];
+    function calendarHtml() {
+      const goal = store.get("daily-goal", 120); // phút
+      const now = new Date(), todayKey = today();
+      const frames = [2, 1, 0].map(back => {
+        const first = new Date(now.getFullYear(), now.getMonth() - back, 1);
+        const y = first.getFullYear(), mo = first.getMonth();
+        const days = new Date(y, mo + 1, 0).getDate(), lead = (first.getDay() + 6) % 7; // T2 là cột đầu
+        let total = 0, cells = "";
+        for (let i = 0; i < lead; i++) cells += '<div class="cal-c cal-blank"></div>';
+        for (let d = 1; d <= days; d++) {
+          const dt = new Date(y, mo, d), k = today(dt);
+          if (k > todayKey) { cells += `<div class="cal-c future"><b>${d}</b></div>`; continue; }
+          const ms = dayOf(k).tr + dayOf(k).ls, min = ms / 60000;
+          total += ms;
+          const pct = Math.round((min / goal) * 100);
+          cells += `<div class="cal-c${min >= goal ? " full" : ""}${k === todayKey ? " is-today" : ""}" tabindex="0"
+            data-tip="<b>${WEEKDAY[dt.getDay()]}, ${ddmm(dt)}</b><br>${ms ? `${fmtDur(ms)} / ${fmtDur(goal * 60000)} (${pct}%)` : "Không học"}">
+            <div class="fill" style="height:${Math.min(100, pct)}%"></div><b>${d}</b></div>`;
         }
-      }
+        return `<div class="cal-month"><div class="cal-head"><b>Tháng ${mo + 1}</b><span>${total ? fmtDur(total) : "—"}</span></div>
+          <div class="cal-grid">${["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(w => `<span class="cal-dn">${w}</span>`).join("")}${cells}</div></div>`;
+      }).join("");
+      const custom = !GOALS.some(([v]) => v === goal);
       return `
         <section class="box">
-          <div class="box-head"><h2>Lịch học 12 tuần</h2>
-            <span class="heat-legend">Ít <i class="hc l0"></i><i class="hc l1"></i><i class="hc l2"></i><i class="hc l3"></i><i class="hc l4"></i> Nhiều</span></div>
-          <div class="heat tip-box">${html}</div>
-          <p class="hint" style="margin:10px 0 0">Ô càng đậm là học càng lâu: dưới 5 phút · 5–15 · 15–30 · trên 30 phút.</p>
+          <div class="box-head"><h2>Lịch học</h2>
+            <div class="goal-pick"><span class="hint">Mục tiêu mỗi ngày</span>
+              <div class="opt-group">${GOALS.map(([v, l]) => `<button data-goal="${v}" class="${v === goal ? "on" : ""}">${l}</button>`).join("")}<button data-goal="custom" class="${custom ? "on" : ""}">${custom ? fmtDur(goal * 60000, true) : "Tự nhập"}</button></div>
+              <span class="goal-custom" id="goal-custom" hidden><input type="number" min="5" max="720" step="5" value="${goal}" id="goal-input" aria-label="Số phút mỗi ngày"> phút <button class="btn sm" id="goal-save">Lưu</button></span>
+            </div>
+          </div>
+          <div class="cal-months tip-box">${frames}</div>
+          <p class="hint" style="margin:10px 0 0">Ô tô dần từ dưới lên theo % mục tiêu · ô <b>xanh đậm</b> là đã đạt ${fmtDur(goal * 60000)} · chạm / rê vào ô để xem số phút.</p>
         </section>`;
     }
 

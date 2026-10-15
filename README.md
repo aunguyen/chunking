@@ -96,7 +96,8 @@ Bấm **Tổng kết** ở trang chủ:
 
 - **Hôm nay**: số phút đã học (chia Dịch / Nghe), số câu dịch, điểm trung bình, số câu nghe – nhắc lại.
 - Tổng thời gian, số ngày đã học, chuỗi ngày hiện tại và dài nhất — chọn xem **7 ngày / 30 ngày / Tất cả**.
-- Biểu đồ thời gian học mỗi ngày (rê chuột vào cột để xem số phút, có nút **Xem dạng bảng**), lịch học 12 tuần, bảng theo từng cụm.
+- Biểu đồ thời gian học mỗi ngày (rê chuột vào cột để xem số phút, có nút **Xem dạng bảng**), bảng theo từng cụm.
+- **Lịch học**: 3 tháng gần nhất, mỗi khung 1 tháng (T2 → CN). Chọn **mục tiêu mỗi ngày** (30p · 1g · 1g30 · 2g · 3g · tự nhập); mỗi ô dâng màu từ dưới lên theo % mục tiêu, đạt đủ thì **xanh đậm**.
 - **Cách tính giờ:** chỉ đếm khi đang ở phần Dịch / Nghe, trang đang hiện trên màn hình, và có thao tác trong 60 giây gần nhất hoặc đang phát audio. Để máy đó đi làm việc khác thì không bị tính.
 
 ## Thêm / sửa / xoá cụm ngay trên web
