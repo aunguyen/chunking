@@ -58,7 +58,7 @@ Rồi mở http://localhost:8765
 
 - Nhịp mỗi câu: **nghe 2 lần** (cách nhau 0,5 giây) → tiếng **“ting”** → **lượt bạn nói = độ dài câu + 2 giây** (có vòng đếm ngược) → câu tiếp.
 - Bấm các chip hoặc **Tuỳ chỉnh** để đổi: tốc độ đọc, số lần nghe (1/2/3), lượt nói (câu +1s / +2s / +3s, 1,5× / 2× câu), số vòng mỗi câu, hiện chữ (luôn hiện / chỉ hiện khi nhắc lại / ẩn), giọng đọc, tiếng “ting”, nghĩa tiếng Việt, lặp cả danh sách.
-- Câu nghe xong được đánh dấu ✓; nghe hết danh sách = 1 lượt.
+- Câu nghe xong được đánh dấu ✓; nghe hết danh sách = 1 lượt. Xong 1 lượt thì thanh **Nghe** trên trang chủ giữ **xanh 2 ngày**; hết hạn thì về xám, tính lại từ đầu và hiện nhãn **Đến hạn nghe lại**.
 - Phím tắt: `Space` phát / tạm dừng, `←` `→` chuyển câu.
 - Giọng đọc lấy từ trình duyệt. Trên Mac nên chọn **Samantha** (Mỹ) hoặc **Daniel** (Anh). Muốn thêm giọng: *System Settings → Accessibility → Spoken Content → System Voice → Manage Voices*.
 
@@ -134,7 +134,7 @@ Mở file [`data/chunks.js`](data/chunks.js), copy một block có sẵn rồi s
 Mẹo:
 - `en` là **mảng** — càng ghi nhiều cách dịch đúng, chấm càng sát. Đáp án **đầu tiên** được dùng cho phần Nghe.
 - `structure` tách bằng ` + `. Phần bắt đầu bằng `V`, `N`, `sb`, `sth`… hiện thành ô trống (viền đứt), phần còn lại tô vàng.
-- Cụm có chỗ trống như `get sth done`, `make sb do sth` → app chấp nhận tối đa 4 từ ở chỗ trống.
+- Cụm có chỗ trống ở giữa thì ghi `…` (hoặc `sb` / `sth`) đúng chỗ, ví dụ `One thing I really like about … is`, `get sth done` → app chấp nhận tối đa 10 từ ở chỗ trống. Khi lưu, nếu cụm không khớp đáp án nào, app sẽ hỏi lại.
 - Từ sở hữu / đại từ (my, your, her…; me, him, them…) được coi là tương đương, nên `make up one's mind` khớp với `made up her mind`.
 - Nếu app nhận diện cụm chưa đúng, thêm trường `match` với regex tự viết, ví dụ `match: ["look(s|ed|ing)? forward to"]`.
 - Lưu file rồi tải lại trang (`⌘R`) là thấy.

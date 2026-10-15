@@ -172,7 +172,7 @@
     return html + (open ? "</mark>" : "");
   }
   let refreshMarks = null; // trang hiện tại đăng ký để vẽ lại khi danh sách cụm chờ thay đổi
-  const spokenChunk = c => matcherFor(c).label.replace(/\bsb\b/gi, "somebody").replace(/\bsth\b/gi, "something");
+  const spokenChunk = c => matcherFor(c).label.replace(/\s*…\s*/g, " ").replace(/\bsb\b/gi, "somebody").replace(/\bsth\b/gi, "something");
 
   function playlistFor(c) {
     if (c.listen && c.listen.length) return c.listen.map(x => (typeof x === "string" ? { en: x, vi: "" } : x));
@@ -541,7 +541,17 @@
     if (changed) store.set("tr:" + c.id, st);
     return st;
   }
-  const listenState = c => Object.assign({ done: [], rounds: 0 }, store.get("listen:" + c.id, {}));
+  // Tiến độ nghe: done = mục đã nghe xong trong lượt này, rounds = số lượt,
+  // greenUntil = nghe xong 1 lượt → giữ "xong" 2 ngày; hết hạn thì tính lại từ đầu (relisten = đến hạn nghe lại)
+  function loadListen(key) {
+    const ls = Object.assign({ done: [], rounds: 0, greenUntil: null, relisten: false }, store.get(key, {}));
+    if (ls.greenUntil && ls.greenUntil <= today()) {
+      ls.done = []; ls.greenUntil = null; ls.relisten = true;
+      store.set(key, ls);
+    }
+    return ls;
+  }
+  const listenState = c => loadListen("listen:" + c.id);
 
   function chunkInfo(c) {
     const best = store.get("best:" + c.id, null);
@@ -709,9 +719,10 @@
       : x.doneCount ? { label: `${x.doneCount}/${x.total} câu`, w: (x.doneCount / x.total) * 100, cls: "" }
       : { label: "—", w: 0, cls: "" };
     const heard = x.ls.done.length;
-    const ls = !heard && x.ls.rounds ? { label: `Xong ✓ · ${x.ls.rounds} lượt`, w: 100, cls: "f-good" }
+    const green = x.ls.greenUntil && x.ls.greenUntil > today(); // nghe xong 1 lượt → xanh 2 ngày
+    const ls = green ? { label: `Xong ✓ · ${x.ls.rounds} lượt · nghe lại ${fmtDay(x.ls.greenUntil)}`, w: 100, cls: "f-good" }
       : heard ? { label: `${heard}/${x.items} câu${x.ls.rounds ? ` · ${x.ls.rounds} lượt` : ""}`, w: (heard / x.items) * 100, cls: "" }
-      : { label: "—", w: 0, cls: "" };
+      : { label: x.ls.rounds ? `0/${x.items} câu · ${x.ls.rounds} lượt` : "—", w: 0, cls: "" };
     return `
       <a class="chunk-card${isLast ? " continue" : ""}" href="#/c/${encodeURIComponent(c.id)}"
          data-status="${x.status}" data-q="${esc((c.chunk + " " + (c.meaning || "")).toLowerCase())}">
@@ -724,6 +735,7 @@
         <p class="meaning">${esc(c.meaning || "")}</p>
         ${x.dueCount ? `<div class="due-tag">${icon("refresh")} ${x.dueCount} câu đến hạn ôn</div>`
           : x.restUntil ? `<div class="due-tag ok">${icon("check")} Đã thuộc — ôn lại ${fmtDay(x.restUntil)}</div>` : ""}
+        ${x.ls.relisten ? `<div class="due-tag">${icon("headphones")} Đến hạn nghe lại</div>` : ""}
         <div class="meter">
           <div class="meter-label"><span>Dịch</span><span>${tr.label}</span></div>
           <div class="track"><div class="${tr.cls}" style="width:${tr.w}%"></div></div>
@@ -1283,7 +1295,7 @@
     const splits = CUE ? items.map(it => cueSplit(c, it.en)) : null;
     const enHtml = i => highlight(c, items[i].en, CUE ? splits[i].cutChar : null);
     const pkey = (CUE ? "cue:" : "listen:") + c.id; // tiến độ tính riêng cho từng phần
-    const ls = Object.assign({ done: [], rounds: 0 }, store.get(pkey, {}));
+    const ls = loadListen(pkey);
     const done = new Set(ls.done);
     const label = matcherFor(c).label;
     let idx = Math.max(0, items.findIndex((_, i) => !done.has(i)));
@@ -1418,8 +1430,10 @@
       markToday();
       roundShown = false;
       done.add(i);
+      ls.relisten = false;
       if (done.size >= items.length) {
         ls.rounds++;
+        ls.greenUntil = today(addDays(new Date(), 2)); // giữ "xong" 2 ngày
         done.clear();
         roundShown = true; // vẫn hiện đủ dấu ✓ cho tới câu tiếp theo
         toast(`Xong ${ls.rounds} lượt nghe “${label}”`);
@@ -2015,7 +2029,7 @@
       return { chunk: get("#ed-chunk"), meaning: get("#ed-meaning"), structure: get("#ed-structure"), sentences };
     }
 
-    function save() {
+    async function save() {
       const d = collect();
       const errs = [];
       if (!d.chunk) errs.push("Chưa nhập cụm chunking");
@@ -2031,6 +2045,14 @@
         box.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
+      // Cụm không khớp đáp án nào của câu → thường do thiếu "…" ở chỗ trống giữa cụm
+      const mt = Grader.makeChunkMatcher({ chunk: d.chunk, match: !isNew && c.match && c.chunk === d.chunk ? c.match : null });
+      const miss = d.sentences.filter(s => !s.en.some(a => mt.test(a))).length;
+      if (miss && !(await confirmDialog({
+        title: `Cụm chưa khớp với ${miss}/${d.sentences.length} câu`,
+        body: `App không thấy cụm “${esc(mt.label)}” trong đáp án của ${miss} câu. Thường là do thiếu dấu <b>…</b> ở chỗ trống giữa cụm (ví dụ: <i>like about … is</i>). Vẫn lưu?`,
+        okText: "Vẫn lưu"
+      }))) return;
       const chunk = { id: isNew ? uniqueId(slugify(d.chunk)) : c.id, chunk: d.chunk, meaning: d.meaning };
       if (d.structure) chunk.structure = d.structure;
       chunk.sentences = d.sentences;

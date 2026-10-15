@@ -146,7 +146,7 @@
       if (WILDCARDS.has(t)) { pendingWild = true; continue; }
       const words = normalizeText(t);
       for (const w of words) {
-        if (out) out += pendingWild ? "\\s+(?:\\S+\\s+){0,4}" : "\\s+";
+        if (out) out += pendingWild ? "\\s+(?:\\S+\\s+){0,10}" : "\\s+"; // chỗ trống: tối đa 10 chữ
         const forms = [...wordForms(w)].sort((a, b) => b.length - a.length).map(escapeRe);
         out += forms.length > 1 ? "(?:" + forms.join("|") + ")" : forms[0];
         pendingWild = false;
@@ -160,7 +160,8 @@
     const normRes = sources.map(p => new RegExp("(?:^|\\s)(?:" + p + ")(?=\\s|$)"));
     const rawRes = sources.map(p => new RegExp("\\b(?:" + p.replace(/\\s\+/g, "[\\s,]+") + ")\\b", "gi"));
     return {
-      label: String(chunk.chunk).replace(/\s*(\.{3,}|…)\s*/g, " ").trim(),
+      // Nhãn hiển thị: giữ "…" ở chỗ trống giữa cụm, bỏ "…" ở đầu / cuối
+      label: String(chunk.chunk).replace(/\s*(\.{3,}|…)\s*/g, " … ").trim().replace(/^…\s*|\s*…$/g, "").trim(),
       test(text) {
         const norm = normalizeText(text).join(" ");
         return normRes.some(re => re.test(norm));
@@ -272,13 +273,15 @@
     const uFlat = flatTokens(userDisp);
     const user = uFlat.map(x => x.w);
     if (!user.length) return { empty: true, score: 0, chunkUsed: false, sim: 0, best: answers[0], marks: null };
-    const chunkUsed = matcher.test(input);
+    let chunkUsed = matcher.test(input);
     let best = null;
     for (const ans of answers) {
       const refDisp = splitDisplay(ans), rFlat = flatTokens(refDisp);
       const r = align(user, rFlat.map(x => x.w));
       if (!best || r.sim > best.sim) best = { ...r, answer: ans, refDisp, rFlat };
     }
+    // Khớp hẳn đáp án mẫu, hoặc chính đáp án mẫu không chứa cụm (cụm khai báo chưa chuẩn) → không trừ điểm cụm
+    if (!chunkUsed && (best.sim > 0.999 || !matcher.test(best.answer))) chunkUsed = true;
     const raw = chunkUsed ? 4 + 6 * best.sim : 4 * best.sim;
     const score = best.sim > 0.999 && chunkUsed ? 10 : Math.round(raw);
     return {
