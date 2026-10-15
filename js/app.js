@@ -691,6 +691,21 @@
     });
     search.addEventListener("input", apply);
     apply();
+
+    // Đến từ nút "Về trang chủ" ở màn kết quả phần Dịch
+    if (store.get("home-focus", null) === "next") {
+      store.del("home-focus");
+      const target = infos.find(x => x.total > 0 && x.doneCount < x.total);
+      if (!target) { toast("Tất cả các cụm đã xong phần Dịch 🎉"); return; }
+      const card = [...app.querySelectorAll(".chunk-card")].find(el => el.getAttribute("href") === "#/c/" + encodeURIComponent(target.c.id));
+      if (!card) return;
+      if (card.hidden) { filter = "all"; store.set("home-filter", "all"); search.value = ""; apply(); }
+      setTimeout(() => { // chờ sau lệnh cuộn về đầu trang khi chuyển trang
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("flash");
+        setTimeout(() => card.classList.remove("flash"), 3000);
+      }, 60);
+    }
   }
 
   function pendingBoxHtml() {
@@ -1019,6 +1034,7 @@
             <div class="actions">
               ${wrong.length ? `<button class="btn primary" id="retry-wrong">${icon("refresh")} Làm lại ${wrong.length} câu ${strict ? "chưa đúng ngay lần đầu" : "chưa tốt"}</button>` : ""}
               <a class="btn${wrong.length ? "" : " primary"}" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} Sang phần Nghe</a>
+              <button class="btn" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">${icon("arrowLeft")} Về trang chủ</button>
             </div>
           </div>
         </div>`;
@@ -1152,6 +1168,7 @@
       if (t.closest("[data-skip]")) return gradeCurrent(true);
       if (t.closest("#reset")) return reset();
       if (t.closest("#retry-wrong")) return retryWrong();
+      if (t.closest("#go-home-next")) { store.set("home-focus", "next"); location.hash = "#/"; return; }
       const go = t.closest("[data-go]");
       if (!go || +go.dataset.go === current) return;
       const i = +go.dataset.go;

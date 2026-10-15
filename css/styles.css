@@ -708,3 +708,10 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 .btn.danger-solid { background: var(--bad); border-color: var(--bad); color: #fff; }
 .btn.danger-solid:hover { opacity: .9; }
 .topic-note { margin: 2px 0 0 46px; font-size: .78rem; color: var(--muted); }
+
+/* Về trang chủ → nhấp nháy viền cụm chưa xong phần Dịch */
+.chunk-card.flash { animation: card-flash 1s ease-in-out 3; }
+@keyframes card-flash {
+  0%, 100% { box-shadow: var(--shadow); }
+  50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 8px var(--accent-soft); }
+}
