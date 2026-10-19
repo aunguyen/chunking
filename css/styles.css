@@ -745,3 +745,36 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 .cal-c.is-today { outline: 2px solid var(--text); outline-offset: 1px; }
 .cal-c:not(.future):not(.cal-blank):hover, .cal-c:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 @media (max-width: 720px) { .cal-months { display: flex; flex-direction: column-reverse; } } /* điện thoại: tháng này lên đầu */
+
+/* =========================================================
+   TÀI KHOẢN & ĐỒNG BỘ
+   ========================================================= */
+.btn.acct { gap: 6px; max-width: 180px; }
+.btn.acct { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sync-dot.s-synced { background: var(--good); }
+.sync-dot.s-syncing, .sync-dot.s-loading { background: var(--warn); animation: blink 1s ease-in-out infinite alternate; }
+.sync-dot.s-error { background: var(--bad); }
+@keyframes blink { from { opacity: 1; } to { opacity: .35; } }
+.menu-head { display: grid; gap: 2px; padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); font-size: .82rem; }
+.menu-head b { font-weight: 600; color: var(--text); word-break: break-all; }
+.menu-head span { color: var(--text-2); }
+.dlg.login { display: grid; gap: 12px; }
+.dlg.login .hint { margin: 0; }
+.dlg.login .field input { font-size: 1rem; }
+.login-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+.login-tabs button { flex: 1; padding: 7px 8px; border-radius: 8px; font-weight: 500; color: var(--text-2); }
+.login-tabs button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.login-msg { font-size: .85rem; padding: 8px 12px; border-radius: var(--radius-sm); }
+.login-msg.err { background: var(--bad-soft); color: var(--bad); }
+.login-msg.ok { background: var(--good-soft); color: var(--good); }
+.dlg.login .forgot { justify-self: end; margin-top: -4px; }
+.dlg.login .dlg-actions { margin-top: 4px; }
+.dlg.login .btn { white-space: nowrap; }
+/* nút tài khoản: cuối hàng trên máy tính; trên điện thoại nằm cạnh logo */
+.home-top .home-actions { margin-left: auto; }
+#acct-slot { display: flex; }
+@media (max-width: 560px) {
+  #acct-slot { margin-left: auto; }
+  .home-top .home-actions { order: 1; margin-left: 0; }
+}

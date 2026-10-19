@@ -6,8 +6,17 @@ Web app chạy local để luyện chunking tiếng Anh. Không cần cài đặ
 
 Mở **https://aunguyen.github.io/chunking/** bằng Safari → nút **Chia sẻ** → **Thêm vào MH chính** để có biểu tượng app.
 
-- Tiến độ trên iPhone lưu riêng trong Safari của iPhone. Muốn chuyển dữ liệu từ Mac: trên Mac bấm **Tải file sao lưu** → AirDrop sang iPhone → trên iPhone bấm **Khôi phục từ file**.
 - Không nghe thấy giọng đọc? Kiểm tra nút gạt im lặng và âm lượng.
+
+## Tài khoản & đồng bộ (học tiếp trên máy khác)
+
+Bấm **Đăng nhập** ở góc trên trang chủ → **Tạo tài khoản** (email + mật khẩu). Từ đó điểm, tiến độ, thời gian học, cụm tự thêm, từ tương đương… tự đồng bộ giữa các máy đăng nhập cùng tài khoản (dùng Firebase của Google, gói miễn phí).
+
+- Lần đầu tạo tài khoản: dữ liệu đang có trên máy đó được đưa lên tài khoản. Máy đăng nhập sau sẽ nhận dữ liệu của tài khoản (thời gian học và chuỗi ngày thì được cộng gộp).
+- Vẫn học được khi mất mạng; có mạng lại app tự đồng bộ. Chấm cạnh tên tài khoản: xanh = đã đồng bộ, cam = đang gửi, đỏ = lỗi (tự thử lại).
+- **Đăng xuất** xoá dữ liệu trên máy đó (dữ liệu vẫn nằm trong tài khoản). Quên mật khẩu: bấm **Quên mật khẩu?** để nhận email đặt lại.
+- **Khôi phục từ file** khi đang đăng nhập sẽ thay dữ liệu của cả tài khoản bằng dữ liệu trong file.
+- Mã nguồn đồng bộ: `js/sync.js`. Dữ liệu nằm ở Firestore `users/{uid}` — chỉ chủ tài khoản đọc / ghi được.
 
 ## Mở app
 
@@ -150,6 +159,7 @@ css/styles.css    giao diện (tự đổi theo chế độ sáng/tối của m�
 data/chunks.js    DỮ LIỆU — chỉ cần sửa file này
 js/grader.js      chấm điểm + đánh dấu chỗ sai
 js/speech.js      giọng đọc (Web Speech API)
+js/sync.js        đăng nhập + đồng bộ tài khoản (Firebase)
 js/app.js         trang chủ, phần Dịch, phần Nghe, Tổng kết, Thêm / sửa cụm, sao lưu
 Tao-bai-nghe.command  bấm đúp để tạo file bài nghe cho iPhone
 tools/tao-bai-nghe.js script tạo bài nghe (giọng macOS + afconvert)

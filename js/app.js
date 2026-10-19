@@ -12,8 +12,9 @@
       try { const v = localStorage.getItem("chunking:" + key); return v == null ? fallback : JSON.parse(v); }
       catch (e) { return fallback; }
     },
-    set(key, val) { try { localStorage.setItem("chunking:" + key, JSON.stringify(val)); } catch (e) { /* bỏ qua */ } },
-    del(key) { try { localStorage.removeItem("chunking:" + key); } catch (e) { /* bỏ qua */ } }
+    // auto = app tự tính lại (vd. reset câu đến hạn ôn) → không coi là "vừa sửa", để không đè tiến độ mới hơn từ máy khác
+    set(key, val, auto) { try { localStorage.setItem("chunking:" + key, JSON.stringify(val)); } catch (e) { /* bỏ qua */ } if (window.Sync && !auto) Sync.touch(key); },
+    del(key) { try { localStorage.removeItem("chunking:" + key); } catch (e) { /* bỏ qua */ } if (window.Sync) Sync.touch(key); }
   };
   const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const pretty = s => String(s).replace(/\.{3,}/g, "…");
@@ -52,6 +53,8 @@
     bookmark: '<path d="M18 7v14l-6-4-6 4V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4z"/>',
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 17h2"/>',
     equal: '<path d="M5 10h14M5 14h14"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/>',
+    logout: '<path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h11m-3-3 3 3-3 3"/>',
     dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.5 1-2.1A6 6 0 0 0 12 3z"/>'
@@ -110,8 +113,9 @@
     window.addEventListener("scroll", close, { passive: true });
     window.addEventListener("hashchange", close);
     return {
-      open(anchor, items, pick) {
-        el.innerHTML = items.map(it => `<button data-act="${it.act}" class="${it.danger ? "danger" : ""}">${icon(it.icon)} ${it.label}</button>`).join("");
+      open(anchor, items, pick, head) {
+        el.innerHTML = (head ? `<div class="menu-head">${head}</div>` : "")
+          + items.map(it => `<button data-act="${it.act}" class="${it.danger ? "danger" : ""}">${icon(it.icon)} ${it.label}</button>`).join("");
         el.hidden = false;
         onPick = pick;
         const r = anchor.getBoundingClientRect();
@@ -538,7 +542,7 @@
       st.due[i] = null; st.review[i] = true;
       changed = true;
     }
-    if (changed) store.set("tr:" + c.id, st);
+    if (changed) store.set("tr:" + c.id, st, true);
     return st;
   }
   // Tiến độ nghe: done = mục đã nghe xong trong lượt này, rounds = số lượt,
@@ -547,7 +551,7 @@
     const ls = Object.assign({ done: [], rounds: 0, greenUntil: null, relisten: false }, store.get(key, {}));
     if (ls.greenUntil && ls.greenUntil <= today()) {
       ls.done = []; ls.greenUntil = null; ls.relisten = true;
-      store.set(key, ls);
+      store.set(key, ls, true);
     }
     return ls;
   }
@@ -617,6 +621,7 @@
           <a class="btn sm" href="#/tong-ket">${icon("chart")} Tổng kết</a>
           <a class="btn sm primary" href="#/them">${icon("plus")} Thêm cụm</a>
         </div>
+        <span id="acct-slot">${acctHtml()}</span>
       </header>
       <section class="stats">
         <div class="stat"><small>Cụm đã thành thạo</small><b>${infos.filter(x => x.status === "ok").length}</b><span> / ${infos.length}</span></div>
@@ -631,7 +636,7 @@
       <div class="grid">${infos.map(x => cardHtml(x, last)).join("")}</div>
       <p class="empty" hidden>${CHUNKS.length ? "Không có cụm nào khớp." : "Chưa có cụm nào — bấm “Thêm cụm” để bắt đầu."}</p>
       <footer class="home-foot">
-        <span>Cụm tự thêm, điểm và thời gian học được lưu trong trình duyệt này.</span>
+        <span>${acctOn() ? "Đã đăng nhập: dữ liệu tự đồng bộ với tài khoản." : "Chưa đăng nhập: cụm tự thêm, điểm và thời gian học chỉ lưu trong trình duyệt này."}</span>
         <button class="link" id="backup-dl">${icon("download")} Tải file sao lưu</button>
         <label class="link">${icon("upload")} Khôi phục từ file<input type="file" accept=".json,application/json" id="backup-ul" hidden></label>
         <a class="link" href="#/tuong-duong">${icon("equal")} Từ tương đương</a>
@@ -664,6 +669,11 @@
       });
       app.querySelector(".empty").hidden = shown > 0;
     }
+    app.querySelector(".home-top").addEventListener("click", e => {
+      if (e.target.closest("#acct-login")) return openLogin("in");
+      const m = e.target.closest("#acct-menu");
+      if (m) openAccountMenu(m);
+    });
     app.querySelector(".grid").addEventListener("click", e => {
       const btn = e.target.closest("[data-menu]");
       if (!btn) return;
@@ -2229,7 +2239,7 @@
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k.startsWith("chunking:")) data[k] = localStorage.getItem(k);
+        if (k.startsWith("chunking:") && !k.startsWith("chunking:__")) data[k] = localStorage.getItem(k);
       }
     } catch (e) { return toast("Trình duyệt không cho đọc dữ liệu để sao lưu"); }
     const blob = new Blob([JSON.stringify({ app: "chunking-practice", version: 1, exported: new Date().toISOString(), data }, null, 2)],
@@ -2253,14 +2263,153 @@
       }
       if (!confirm("Khôi phục sẽ thay toàn bộ dữ liệu hiện tại (cụm tự thêm, điểm, thời gian học) bằng dữ liệu trong file. Tiếp tục?")) return;
       try {
-        Object.keys(localStorage).filter(k => k.startsWith("chunking:")).forEach(k => localStorage.removeItem(k));
-        Object.entries(obj.data).forEach(([k, v]) => { if (k.startsWith("chunking:")) localStorage.setItem(k, v); });
+        Object.keys(localStorage).filter(k => k.startsWith("chunking:") && !k.startsWith("chunking:__")).forEach(k => localStorage.removeItem(k));
+        Object.entries(obj.data).forEach(([k, v]) => { if (k.startsWith("chunking:") && !k.startsWith("chunking:__")) localStorage.setItem(k, v); });
       } catch (e) { return toast("Không ghi được dữ liệu vào trình duyệt"); }
+      if (window.Sync) Sync.touchAll(); // đưa bản khôi phục lên tài khoản (nếu đã đăng nhập)
       applyEquiv();
       loadChunks();
       route();
       toast("Đã khôi phục dữ liệu");
     });
+  }
+
+  // =========================================================
+  // TÀI KHOẢN & ĐỒNG BỘ (xem js/sync.js)
+  // =========================================================
+  const SYNC_TEXT = {
+    off: "Chưa đồng bộ", loading: "Đang kết nối…", syncing: "Đang đồng bộ…",
+    synced: "Đã đồng bộ", offline: "Đang offline — có mạng sẽ tự đồng bộ", error: "Lỗi đồng bộ — sẽ tự thử lại"
+  };
+  // đang đăng nhập (kể cả lúc mất mạng chưa kết nối lại được)
+  function acctOn() {
+    const s = window.Sync ? Sync.info() : null;
+    return !!s && (s.loggedIn || (s.known && s.state !== "off"));
+  }
+  function acctHtml() {
+    const s = window.Sync ? Sync.info() : { state: "off" };
+    if (!acctOn()) return `<button class="btn sm" id="acct-login">${icon("user")} Đăng nhập</button>`;
+    const name = (s.email || "").split("@")[0] || "Tài khoản";
+    return `<button class="btn sm acct" id="acct-menu" data-menu="acct" title="${esc(s.email)} · ${SYNC_TEXT[s.state] || ""}"><span class="sync-dot s-${s.state}"></span>${esc(name)}</button>`;
+  }
+
+  function openAccountMenu(anchor) {
+    const s = Sync.info();
+    const head = `<b>${esc(s.email || "")}</b><span>${SYNC_TEXT[s.state] || ""}${s.pending ? ` · ${s.pending} mục chờ` : ""}</span>`;
+    PopMenu.open(anchor, [
+      { act: "sync", icon: "refresh", label: "Đồng bộ ngay" },
+      { act: "logout", icon: "logout", label: "Đăng xuất", danger: true }
+    ], async act => {
+      if (act === "sync") { await Sync.syncNow(); toast(Sync.info().state === "synced" ? "Đã đồng bộ" : SYNC_TEXT[Sync.info().state]); return; }
+      const pending = Sync.hasPending();
+      const ok = await confirmDialog({
+        title: "Đăng xuất?",
+        body: pending
+          ? "Còn dữ liệu <b>chưa kịp lên mạng</b> (có thể do đang mất mạng). Đăng xuất bây giờ sẽ mất phần đó. Nên đợi có mạng rồi bấm “Đồng bộ ngay” trước."
+          : "Dữ liệu vẫn nằm trong tài khoản. Trên máy này, dữ liệu sẽ được xoá để người khác dùng máy không xem được.",
+        okText: "Đăng xuất", danger: pending
+      });
+      if (!ok) return;
+      await Sync.signOut();
+      location.hash = "#/";
+      location.reload();
+    }, head);
+  }
+
+  const AUTH_ERR = {
+    "auth/invalid-email": "Email không hợp lệ.",
+    "auth/missing-email": "Nhập email trước đã.",
+    "auth/missing-password": "Nhập mật khẩu.",
+    "auth/user-not-found": "Email hoặc mật khẩu không đúng.",
+    "auth/wrong-password": "Email hoặc mật khẩu không đúng.",
+    "auth/invalid-credential": "Email hoặc mật khẩu không đúng.",
+    "auth/invalid-login-credentials": "Email hoặc mật khẩu không đúng.",
+    "auth/email-already-in-use": "Email này đã có tài khoản — chuyển sang “Đăng nhập” nhé.",
+    "auth/weak-password": "Mật khẩu cần ít nhất 6 ký tự.",
+    "auth/network-request-failed": "Không kết nối được — kiểm tra mạng rồi thử lại.",
+    "auth/too-many-requests": "Thử quá nhiều lần — đợi vài phút rồi thử lại."
+  };
+  const authMessage = e => AUTH_ERR[e && e.code] || (e && /tải được/.test(e.message) ? "Không tải được hệ thống đăng nhập — kiểm tra mạng rồi thử lại." : "Có lỗi, thử lại sau nhé.");
+
+  function openLogin(mode) {
+    if (!window.Sync) return toast("Chưa tải được phần đăng nhập");
+    const wrap = document.createElement("div");
+    wrap.className = "dlg-overlay";
+    let email = "";
+    const close = () => { document.removeEventListener("keydown", onKey, true); wrap.remove(); };
+    const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    function render() {
+      const up = mode === "up";
+      wrap.innerHTML = `
+        <form class="dlg login" novalidate>
+          <div class="login-tabs">
+            <button type="button" data-mode="in" class="${up ? "" : "on"}">Đăng nhập</button>
+            <button type="button" data-mode="up" class="${up ? "on" : ""}">Tạo tài khoản</button>
+          </div>
+          <p class="hint">${up ? "Tạo tài khoản để học tiếp trên mọi máy. Dữ liệu đang có trên máy này sẽ được đưa lên tài khoản."
+            : "Đăng nhập để đồng bộ điểm, tiến độ và các cụm của bạn giữa máy tính và điện thoại."}</p>
+          <label class="field"><span>Email</span><input type="email" name="email" autocomplete="email" inputmode="email" value="${esc(email)}"></label>
+          <label class="field"><span>Mật khẩu${up ? " (ít nhất 6 ký tự)" : ""}</span><input type="password" name="pw" autocomplete="${up ? "new-password" : "current-password"}"></label>
+          ${up ? '<label class="field"><span>Nhập lại mật khẩu</span><input type="password" name="pw2" autocomplete="new-password"></label>'
+            : '<button type="button" class="link forgot" data-reset>Quên mật khẩu?</button>'}
+          <div class="login-msg" hidden></div>
+          <div class="dlg-actions">
+            <button type="button" class="btn" data-cancel>Huỷ</button>
+            <button type="submit" class="btn primary">${up ? "Tạo tài khoản" : "Đăng nhập"}</button>
+          </div>
+        </form>`;
+      (email ? wrap.querySelector('[name="pw"]') : wrap.querySelector('[name="email"]')).focus();
+    }
+    const msg = (text, ok) => { const m = wrap.querySelector(".login-msg"); m.className = "login-msg " + (ok ? "ok" : "err"); m.textContent = text; m.hidden = false; };
+    wrap.addEventListener("input", e => { if (e.target.name === "email") email = e.target.value.trim(); });
+    wrap.addEventListener("click", async e => {
+      if (e.target === wrap || e.target.closest("[data-cancel]")) return close();
+      const tab = e.target.closest("[data-mode]");
+      if (tab && tab.dataset.mode !== mode) { mode = tab.dataset.mode; return render(); }
+      if (e.target.closest("[data-reset]")) {
+        if (!email) return msg("Nhập email ở trên rồi bấm “Quên mật khẩu?” lần nữa.");
+        try { await Sync.resetPassword(email); msg(`Đã gửi email đặt lại mật khẩu tới ${email}. Mở email và làm theo hướng dẫn.`, true); }
+        catch (err) { msg(authMessage(err)); }
+      }
+    });
+    wrap.addEventListener("submit", async e => {
+      e.preventDefault();
+      const f = e.target, pw = f.pw.value;
+      email = f.email.value.trim();
+      if (!email || !pw) return msg("Nhập đủ email và mật khẩu.");
+      if (mode === "up" && pw !== f.pw2.value) return msg("Hai lần nhập mật khẩu chưa khớp.");
+      const btn = f.querySelector('[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = mode === "up" ? "Đang tạo…" : "Đang đăng nhập…";
+      try {
+        if (mode === "up") await Sync.signUp(email, pw); else await Sync.signIn(email, pw);
+        close();
+        toast(mode === "up" ? "Đã tạo tài khoản — đang đưa dữ liệu lên…" : "Đã đăng nhập — đang đồng bộ…");
+        if (!location.hash || location.hash === "#/") renderHome();
+      } catch (err) {
+        msg(authMessage(err));
+        if (/password|credential/.test(err && err.code)) { f.pw.focus(); f.pw.select(); }
+        btn.disabled = false;
+        btn.textContent = mode === "up" ? "Tạo tài khoản" : "Đăng nhập";
+      }
+    });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(wrap);
+    render();
+  }
+
+  if (window.Sync) {
+    // Dữ liệu mới từ máy khác → vẽ lại (trừ khi đang gõ, đang nghe hay đang sửa cụm: để lần chuyển trang sau)
+    Sync.on("change", () => {
+      applyEquiv();
+      loadChunks();
+      const a = document.activeElement;
+      const typing = a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.value;
+      const busy = typing || pauseActivePlayer || /^#\/(them|c\/[^/]+\/sua)/.test(location.hash);
+      if (!busy) route();
+      toast("Đã cập nhật dữ liệu từ tài khoản");
+    });
+    Sync.on("state", () => { const slot = document.getElementById("acct-slot"); if (slot) slot.innerHTML = acctHtml(); });
   }
 
   route();
