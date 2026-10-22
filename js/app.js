@@ -569,9 +569,11 @@
     const strict = store.get("strict", true);
     const doneCount = tr.gradedText.filter((g, i) => g !== null && (!strict || !tr.hist[i].length || tr.hist[i].includes(10))).length;
     const ls = listenState(c);
-    const status = best != null && best >= 85 && ls.rounds >= 1 ? "ok"
+    // Thành thạo = thanh Dịch xong 100% + đã nghe xong ít nhất 1 lượt (Phần 2); có câu đến hạn ôn thì tạm về "Đang luyện"
+    const total = (c.sentences || []).length;
+    const status = total > 0 && doneCount >= total && ls.rounds >= 1 ? "ok"
       : best != null || graded || ls.rounds || ls.done.length ? "mid" : "new";
-    return { c, best, graded, doneCount, total: (c.sentences || []).length, ls, items: playlistFor(c).length, status, dueCount, restUntil };
+    return { c, best, graded, doneCount, total, ls, items: playlistFor(c).length, status, dueCount, restUntil };
   }
 
   // =========================================================
