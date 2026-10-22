@@ -51,7 +51,7 @@ Rồi mở http://localhost:8765
   - **Sửa lại**: câu đúng gần nhất, chữ được sửa / thêm **in đậm đỏ**.
   - Kèm "Cách khác" (các đáp án khác) và nút 🔊 nghe.
 - Chưa nghĩ ra → bấm **Xem đáp án** (câu đó 0 điểm).
-- **Nghỉ & ôn lại:** câu đúng 10/10 **ngay lần đầu** được nghỉ 2 ngày — hiện mờ với nhãn “Nghỉ đến T7, 10/10”, app bỏ qua (vẫn bấm xem lại được). Câu phải làm lại mới đúng thì **hôm sau** quay lại. Đến hạn, câu trở lại như mới với nhãn **Ôn lại**; trang chủ báo “N câu đến hạn ôn”, cụm mà mọi câu đang nghỉ thì hiện “Đã thuộc — ôn lại …”.
+- **Nghỉ & ôn lại:** câu đúng 10/10 **ngay lần đầu** được nghỉ, và mỗi lần ôn lại vẫn đúng ngay thì nghỉ lâu hơn: **2 → 4 → 8 → 15 → 30 ngày** — hiện mờ với nhãn “Nghỉ đến T7, 10/10 · lần 2”, app bỏ qua (vẫn bấm xem lại được). Câu phải làm lại mới đúng thì **hôm sau** quay lại, rồi lần nghỉ sau ngắn hơn 1 bậc. Đến hạn, câu trở lại như mới với nhãn **Ôn lại**; trang chủ báo “N câu đến hạn ôn”, cụm mà mọi câu đang nghỉ thì hiện “Đã thuộc — ôn lại …”.
 - Muốn sửa câu cũ → bấm vào câu đó, sửa, Enter để chấm lại.
 - Xong 10 câu → **màn kết quả**: tổng điểm /100, điểm B1 / B2, số câu dùng đúng cụm, kỷ lục; nút **Làm lại các câu chưa tốt** (dưới 8 điểm) và **Sang phần Nghe**.
 
@@ -68,7 +68,7 @@ Rồi mở http://localhost:8765
 
 - Nhịp mỗi câu: **nghe 2 lần** (cách nhau 0,5 giây) → tiếng **“ting”** → **lượt bạn nói = độ dài câu + 2 giây** (có vòng đếm ngược) → câu tiếp.
 - Bấm các chip hoặc **Tuỳ chỉnh** để đổi: tốc độ đọc, số lần nghe (1/2/3), lượt nói (câu +1s / +2s / +3s, 1,5× / 2× câu), số vòng mỗi câu, hiện chữ (luôn hiện / chỉ hiện khi nhắc lại / ẩn), giọng đọc, tiếng “ting”, nghĩa tiếng Việt, lặp cả danh sách.
-- Câu nghe xong được đánh dấu ✓; nghe hết danh sách = 1 lượt. Xong 1 lượt thì thanh **Nghe** trên trang chủ giữ **xanh 2 ngày**; hết hạn thì về xám, tính lại từ đầu và hiện nhãn **Đến hạn nghe lại**.
+- Câu nghe xong được đánh dấu ✓; nghe hết danh sách = 1 lượt. Xong 1 lượt thì thanh **Nghe** trên trang chủ giữ **xanh** theo lịch giãn dần **2 → 4 → 8 → 15 → 30 ngày** (mỗi lần nghe lại đúng hạn thì lên 1 bậc; nghe thêm trong lúc đang xanh không tính); hết hạn thì về xám, tính lại từ đầu và hiện nhãn **Đến hạn nghe lại**.
 - Phím tắt: `Space` phát / tạm dừng, `←` `→` chuyển câu.
 - Giọng đọc lấy từ trình duyệt. Trên Mac nên chọn **Samantha** (Mỹ) hoặc **Daniel** (Anh). Muốn thêm giọng: *System Settings → Accessibility → Spoken Content → System Voice → Manage Voices*.
 

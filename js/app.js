@@ -519,6 +519,10 @@
     };
   })();
 
+  // Ôn giãn dần: mỗi lần đúng ngay lần đầu thì lên 1 bậc, bậc càng cao nghỉ càng lâu (ngày)
+  const REST_DAYS = [2, 4, 8, 15, 30];
+  const restDays = lvl => REST_DAYS[Math.min(Math.max(lvl, 0), REST_DAYS.length - 1)];
+
   // Trạng thái phần dịch: answers = đang gõ, gradedText = câu lúc bấm Enter (null = chưa chấm)
   function loadTr(c) {
     const N = (c.sentences || []).length;
@@ -531,13 +535,17 @@
       overrides: Array.from({ length: N }, (_, i) => !!at(saved.overrides, i, false)),
       hist: Array.from({ length: N }, (_, i) => { const h = at(saved.hist, i, []); return Array.isArray(h) ? h : []; }), // điểm từng lần làm
       due: Array.from({ length: N }, (_, i) => at(saved.due, i, null)),        // ngày câu quay lại để ôn (YYYY-MM-DD)
-      review: Array.from({ length: N }, (_, i) => !!at(saved.review, i, false)) // câu đang được ôn lại
+      review: Array.from({ length: N }, (_, i) => !!at(saved.review, i, false)), // câu đang được ôn lại
+      lvl: Array.from({ length: N }, (_, i) => +at(saved.lvl, i, 0) || 0)          // bậc ôn: số lần đã qua (đúng ngay lần đầu)
     };
     // Đến hạn ôn → câu trở lại như câu mới, phải dịch lại
     const t = today();
     let changed = false;
     for (let i = 0; i < N; i++) {
       if (!st.due[i] || st.due[i] > t) continue;
+      // Lượt vừa rồi đúng ngay lần đầu → lên 1 bậc; phải làm lại mới đúng → lần sau nghỉ ngắn hơn 1 bậc
+      const pass = st.hist[i][0] === 10 && !st.overrides[i];
+      st.lvl[i] = pass ? st.lvl[i] + 1 : Math.max(st.lvl[i] - 2, 0);
       st.gradedText[i] = null; st.answers[i] = ""; st.overrides[i] = false; st.hist[i] = [];
       st.due[i] = null; st.review[i] = true;
       changed = true;
@@ -546,9 +554,11 @@
     return st;
   }
   // Tiến độ nghe: done = mục đã nghe xong trong lượt này, rounds = số lượt,
-  // greenUntil = nghe xong 1 lượt → giữ "xong" 2 ngày; hết hạn thì tính lại từ đầu (relisten = đến hạn nghe lại)
+  // greenUntil = nghe xong 1 lượt → giữ "xong" theo lịch giãn dần (2 → 4 → 8 → 15 → 30 ngày, bậc = lvl);
+  // hết hạn thì tính lại từ đầu (relisten = đến hạn nghe lại)
   function loadListen(key) {
     const ls = Object.assign({ done: [], rounds: 0, greenUntil: null, relisten: false }, store.get(key, {}));
+    if (ls.lvl == null) ls.lvl = ls.rounds > 0 ? 1 : 0; // dữ liệu bản cũ: đã nghe xong lượt nào thì coi như qua bậc đầu
     if (ls.greenUntil && ls.greenUntil <= today()) {
       ls.done = []; ls.greenUntil = null; ls.relisten = true;
       store.set(key, ls, true);
@@ -755,7 +765,7 @@
       : x.doneCount ? { label: `${x.doneCount}/${x.total} câu`, w: (x.doneCount / x.total) * 100, cls: "" }
       : { label: "—", w: 0, cls: "" };
     const heard = x.ls.done.length;
-    const green = x.ls.greenUntil && x.ls.greenUntil > today(); // nghe xong 1 lượt → xanh 2 ngày
+    const green = x.ls.greenUntil && x.ls.greenUntil > today(); // nghe xong 1 lượt → xanh tới ngày nghe lại
     const ls = green ? { label: `Xong ✓ · ${x.ls.rounds} lượt · nghe lại ${fmtDay(x.ls.greenUntil)}`, w: 100, cls: "f-good" }
       : heard ? { label: `${heard}/${x.items} câu${x.ls.rounds ? ` · ${x.ls.rounds} lượt` : ""}`, w: (heard / x.items) * 100, cls: "" }
       : { label: x.ls.rounds ? `0/${x.items} câu · ${x.ls.rounds} lượt` : "—", w: 0, cls: "" };
@@ -877,9 +887,13 @@
     const isDone = i => (strict ? passed(i) : isGraded(i));
     const scoreOf = i => (strict ? tries(i)[0] || 0 : lastScore(i)); // chế độ chặt: tính điểm lần đầu
     const isStale = i => isGraded(i) && st.answers[i].trim() !== st.gradedText[i];
-    // Đúng ngay lần đầu → nghỉ 2 ngày (mờ đi, bỏ qua); phải làm lại mới đúng → hôm sau quay lại
+    // Đúng ngay lần đầu → nghỉ theo bậc 2 → 4 → 8 → 15 → 30 ngày (mờ đi, bỏ qua); phải làm lại mới đúng → hôm sau quay lại
     const resting = i => !!st.due[i] && st.due[i] > today() && tries(i)[0] === 10;
-    const setDue = i => { st.due[i] = today(addDays(new Date(), tries(i)[0] === 10 && !st.overrides[i] ? 2 : 1)); st.review[i] = false; };
+    const setDue = i => {
+      const pass = tries(i)[0] === 10 && !st.overrides[i];
+      st.due[i] = today(addDays(new Date(), pass ? restDays(st.lvl[i]) : 1));
+      st.review[i] = false;
+    };
     const reviewTag = i => (st.review[i] ? '<span class="tag-review">Ôn lại</span>' : "");
     const allDone = () => N > 0 && order.every(isDone);
     const pctNow = () => Math.round((order.reduce((a, i) => a + scoreOf(i), 0) / (N * 10)) * 100);
@@ -990,7 +1004,7 @@
         const k = tries(i).length;
         return `<button class="q-row${resting(i) ? " resting" : ""}" data-go="${i}"><span class="num">${n}</span>
           <span class="tx${txt ? "" : " skip"}">${txt ? esc(txt) : "Đã xem đáp án"}</span>
-          ${resting(i) ? `<span class="rest-tag" title="Đúng ngay lần đầu — nghỉ 2 ngày">${icon("check")} Nghỉ đến ${fmtDay(st.due[i])}</span>` : ""}
+          ${resting(i) ? `<span class="rest-tag" title="Đúng ngay lần đầu ${st.lvl[i] + 1} lần — nghỉ ${restDays(st.lvl[i])} ngày">${icon("check")} Nghỉ đến ${fmtDay(st.due[i])} · lần ${st.lvl[i] + 1}</span>` : ""}
           ${strict && k > 1 ? `<span class="tries" title="Số lần làm">${k} lần</span>` : ""}${chip(i)}</button>`;
       }
       return `<button class="q-row todo${strict ? " locked" : ""}" data-go="${i}"><span class="num">${n}</span><span class="tx">${esc(s.vi)}</span>${reviewTag(i)}</button>`;
@@ -1471,7 +1485,10 @@
       ls.relisten = false;
       if (done.size >= items.length) {
         ls.rounds++;
-        ls.greenUntil = today(addDays(new Date(), 2)); // giữ "xong" 2 ngày
+        if (!(ls.greenUntil && ls.greenUntil > today())) { // nghe thêm trong lúc đang nghỉ thì không lên bậc
+          ls.greenUntil = today(addDays(new Date(), restDays(ls.lvl))); // giữ "xong" theo bậc: 2 → 4 → 8 → 15 → 30 ngày
+          ls.lvl++;
+        }
         done.clear();
         roundShown = true; // vẫn hiện đủ dấu ✓ cho tới câu tiếp theo
         toast(`Xong ${ls.rounds} lượt nghe “${label}”`);
