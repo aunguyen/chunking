@@ -37,6 +37,7 @@ Rồi mở http://localhost:8765
 - Thống kê: số cụm đã thành thạo, điểm dịch trung bình, số câu đã nghe – nhắc lại, **chuỗi ngày luyện liên tiếp**.
 - Lọc theo trạng thái: **Chưa học / Đang luyện / Thành thạo** (thành thạo = điểm dịch cao nhất ≥ 85 và đã nghe hết ít nhất 1 lượt), tìm kiếm cụm.
 - Cụm đang học dở được viền xanh với nút **Luyện tiếp**.
+- Cụm đã **dịch xong 100%** được xếp xuống cuối danh sách, dưới dòng "Đã dịch xong · N cụm". Khi có câu đến hạn ôn, cụm tự quay lên trên.
 
 ## Phần 1 · Dịch Việt → Anh
 

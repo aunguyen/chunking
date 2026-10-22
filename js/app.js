@@ -605,7 +605,10 @@
 
   function renderHome() {
     document.title = "Chunking Practice";
-    const infos = CHUNKS.map(chunkInfo);
+    const trDone = x => x.total > 0 && x.doneCount >= x.total;
+    const all = CHUNKS.map(chunkInfo);
+    const infos = all.filter(x => !trDone(x)).concat(all.filter(trDone)); // cụm đã dịch xong 100% xuống cuối
+    const firstDone = infos.findIndex(trDone);
     const bests = infos.filter(x => x.best != null).map(x => x.best);
     const avg = bests.length ? Math.round(bests.reduce((a, b) => a + b, 0) / bests.length) : null;
     const days = streak();
@@ -618,8 +621,10 @@
         <div class="brand"><span class="brand-mark">${icon("logo")}</span>Chunking</div>
         <div class="home-actions">
           <span class="streak ${days ? "" : "off"}">${icon("flame")} ${days ? `${days} ngày liên tiếp` : "Luyện hôm nay để bắt đầu chuỗi ngày"}</span>
-          <a class="btn sm" href="#/tong-ket">${icon("chart")} Tổng kết</a>
-          <a class="btn sm primary" href="#/them">${icon("plus")} Thêm cụm</a>
+          <span class="home-btns">
+            <a class="btn sm" href="#/tong-ket">${icon("chart")} Tổng kết</a>
+            <a class="btn sm primary" href="#/them">${icon("plus")} Thêm cụm</a>
+          </span>
         </div>
         <span id="acct-slot">${acctHtml()}</span>
       </header>
@@ -633,7 +638,7 @@
         ${FILTERS.map(([k, l]) => `<button class="filter" data-f="${k}">${l}<span class="n">${count(k)}</span></button>`).join("")}
         <label class="search">${icon("search")}<input type="search" placeholder="Tìm cụm…" aria-label="Tìm cụm"></label>
       </div>
-      <div class="grid">${infos.map(x => cardHtml(x, last)).join("")}</div>
+      <div class="grid">${infos.map((x, i) => (i === firstDone ? '<div class="grid-sep"><span>Đã dịch xong · <b></b> cụm</span></div>' : "") + cardHtml(x, last)).join("")}</div>
       <p class="empty" hidden>${CHUNKS.length ? "Không có cụm nào khớp." : "Chưa có cụm nào — bấm “Thêm cụm” để bắt đầu."}</p>
       <footer class="home-foot">
         <span>${acctOn() ? "Đã đăng nhập: dữ liệu tự đồng bộ với tài khoản." : "Chưa đăng nhập: cụm tự thêm, điểm và thời gian học chỉ lưu trong trình duyệt này."}</span>
@@ -662,11 +667,15 @@
       const q = search.value.trim().toLowerCase();
       let shown = 0;
       app.querySelectorAll(".filter").forEach(b => b.classList.toggle("on", b.dataset.f === filter));
+      let shownDone = 0;
       app.querySelectorAll(".chunk-card").forEach(card => {
         const ok = (filter === "all" || card.dataset.status === filter) && (!q || card.dataset.q.includes(q));
         card.hidden = !ok;
         if (ok) shown++;
+        if (ok && card.dataset.trdone) shownDone++;
       });
+      const sep = app.querySelector(".grid-sep");
+      if (sep) { sep.hidden = !shownDone; sep.querySelector("b").textContent = shownDone; }
       app.querySelector(".empty").hidden = shown > 0;
     }
     app.querySelector(".home-top").addEventListener("click", e => {
@@ -750,7 +759,7 @@
       : { label: x.ls.rounds ? `0/${x.items} câu · ${x.ls.rounds} lượt` : "—", w: 0, cls: "" };
     return `
       <a class="chunk-card${isLast ? " continue" : ""}" href="#/c/${encodeURIComponent(c.id)}"
-         data-status="${x.status}" data-q="${esc((c.chunk + " " + (c.meaning || "")).toLowerCase())}">
+         data-status="${x.status}"${trFull ? ' data-trdone="1"' : ""} data-q="${esc((c.chunk + " " + (c.meaning || "")).toLowerCase())}">
         <div class="card-top">
           <span class="status ${STATUS[x.status][0]}">${STATUS[x.status][1]}</span>
           ${isLast ? `<span class="cont">Luyện tiếp ${icon("arrowRight")}</span>` : ""}

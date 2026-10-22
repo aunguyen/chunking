@@ -771,10 +771,20 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 .dlg.login .forgot { justify-self: end; margin-top: -4px; }
 .dlg.login .dlg-actions { margin-top: 4px; }
 .dlg.login .btn { white-space: nowrap; }
-/* nút tài khoản: cuối hàng trên máy tính; trên điện thoại nằm cạnh logo */
-.home-top .home-actions { margin-left: auto; }
-#acct-slot { display: flex; }
+/* Đầu trang chủ: logo | các nút | tài khoản (luôn ở góc phải hàng đầu);
+   hẹp quá thì các nút tự xuống dòng ở giữa; điện thoại: các nút xuống hàng dưới */
+.home-top { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "brand actions acct"; align-items: start; }
+.home-btns { display: flex; gap: 8px; }
+.home-top .brand { grid-area: brand; }
+.home-top .home-actions { grid-area: actions; justify-content: flex-end; }
+#acct-slot { grid-area: acct; display: flex; }
 @media (max-width: 560px) {
-  #acct-slot { margin-left: auto; }
-  .home-top .home-actions { order: 1; margin-left: 0; }
+  .home-top { grid-template-columns: 1fr auto; grid-template-areas: "brand acct" "actions actions"; }
+  .home-top .home-actions { justify-content: flex-start; }
 }
+
+/* Trang chủ: dòng ngăn cách trước nhóm cụm đã dịch xong (nằm cuối danh sách) */
+.grid-sep { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: .82rem; font-weight: 500; color: var(--text-2); }
+.grid-sep b { font-weight: inherit; }
+.grid-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.grid-sep[hidden] { display: none; }
