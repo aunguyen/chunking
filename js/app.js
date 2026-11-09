@@ -55,6 +55,8 @@
     equal: '<path d="M5 10h14M5 14h14"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/>',
     logout: '<path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h11m-3-3 3 3-3 3"/>',
+    chevronDown: '<path d="M6 9l6 6 6-6"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".6" fill="currentColor"/>',
     crown: '<path d="M3 8l4.5 4 4.5-7 4.5 7L21 8l-2 11H5z" fill="currentColor"/>',
@@ -853,6 +855,11 @@
     store.set("tab:" + c.id, tab);
     store.set("stats:last", c.id);
     document.title = `${pretty(c.chunk)} · Chunking`;
+    if (tab === "translate") {
+      app.innerHTML = '<section id="pane"></section>';
+      renderTranslate(c, app.querySelector("#pane"));
+      return;
+    }
     app.innerHTML = `
       <a class="back" href="#/">${icon("arrowLeft")} Tất cả cụm</a>
       <div class="hero">
@@ -945,112 +952,159 @@
     const firstUndone = () => { const i = order.find(x => !isDone(x)); return i === undefined ? null : i; };
 
     let current = firstUndone();
-    let lastGraded = null;   // câu vừa chấm / câu đang xem lại: mở ra để xem phần sửa
-    let armed = null;        // nút "Làm lại" cần bấm 2 lần
+    let viewing = null;      // câu đã làm đang mở ra xem lại (chọn trong danh sách câu)
     let newBest = false;
-    let reviewing = false;   // vừa chấm xong câu hiện tại: dừng lại xem kết quả, Enter lần nữa mới sang câu
+    let reviewing = false;   // vừa chấm xong câu hiện tại: hiện khung kết quả, Enter / TIẾP TỤC mới sang câu
     let announce = false;    // vừa làm xong cả bài → báo khi sang câu
+    let sheetOpen = false;   // chế độ chặt, chấm chưa đúng: khung đỏ đang mở (bấm GÕ LẠI thì thu xuống)
+    let listOpen = false;    // danh sách các câu (bấm thanh tiến độ)
 
     let autoSay = store.get("auto-say", true); // chấm xong thì đọc câu đáp án đúng
     let resultReadyAt = 0, homeOnEnter = false;  // màn kết quả 100/100: Enter → về trang chủ
+    pane.className = "tr-focus";
     pane.innerHTML = `
+      <header class="tr-top">
+        <a class="tr-close" href="#/" aria-label="Về trang chủ">${icon("x")}</a>
+        <button class="tr-prog" id="open-list" aria-label="Xem danh sách các câu"></button>
+        <button class="tr-more" id="tr-more" data-menu="tr" aria-label="Thêm: nghe, gợi ý, sửa cụm, làm lại">${icon("dots")}</button>
+      </header>
       <div class="mode-row">
-        <label class="switch"><input type="checkbox" id="strict"${strict ? " checked" : ""}> <b>Luyện đến khi đúng</b></label>
-        <span class="hint">Câu chưa đúng 100% phải gõ lại mới qua câu tiếp</span>
-        <label class="switch" title="Mỗi lần bấm Enter chấm câu, app đọc câu đáp án đúng để luyện nghe luôn"><input type="checkbox" id="auto-say"${autoSay ? " checked" : ""}> <b>Tự đọc câu đúng</b></label>
+        <label class="switch" title="Câu chưa đúng 100% phải gõ lại mới qua câu tiếp"><input type="checkbox" id="strict"${strict ? " checked" : ""}> <b>Luyện đến khi đúng</b></label>
+        <label class="switch" title="Mỗi lần chấm câu, app đọc câu đáp án đúng để luyện nghe luôn"><input type="checkbox" id="auto-say"${autoSay ? " checked" : ""}> <b>Tự đọc câu đúng</b></label>
       </div>
-      <div class="progress" id="progress"></div><div id="list"></div><div id="result"></div>`;
-    const progEl = pane.querySelector("#progress");
-    const listEl = pane.querySelector("#list");
+      <div id="stage" class="tr-stage"></div>
+      <div id="result"></div>
+      <div id="dock" class="tr-dock"></div>
+      <div id="list-ov" class="list-ov" hidden></div>`;
+    const progEl = pane.querySelector("#open-list");
+    const stageEl = pane.querySelector("#stage");
     const resultEl = pane.querySelector("#result");
+    const dockEl = pane.querySelector("#dock");
+    const listOv = pane.querySelector("#list-ov");
 
     const grow = t => { t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; };
     const chip = (i, v = scoreOf(i)) => `<span class="score sc-${scoreClass(v)}">${v}/10</span>`;
     const triesHtml = i => tries(i).map((v, k) => `Lần ${k + 1}: <b class="t-${scoreClass(v)}">${v}/10</b>`).join(" → ");
+    const levelOf = i => S[i].level || "";
+    const numOf = i => order.indexOf(i) + 1;
+    const touch = matchMedia("(hover: none)").matches; // điện thoại: không tự bật bàn phím khi chưa cần
 
-    function render({ focus = false, scroll = false } = {}) {
+    function render({ focus = false } = {}) {
       renderProgress();
-      renderList();
+      renderStage();
+      renderDock();
       renderResult();
-      if (current === null) return;
-      const ta = listEl.querySelector("textarea");
+      renderListSheet();
+      const ta = stageEl.querySelector("textarea");
+      if (!ta) return;
       grow(ta);
       updateLive();
       if (focus) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }
-      if (scroll) ta.closest(".q-card").scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
+    // Thanh tiến độ dày + "3/10 ▾" (bấm để mở danh sách câu)
     function renderProgress() {
-      if (!N) { progEl.innerHTML = ""; return; }
-      const done = order.filter(isDone);
-      const total = done.reduce((a, i) => a + scoreOf(i), 0);
-      progEl.innerHTML = `
-        <span class="count">${done.length}/${N}</span>
-        <div class="segs">${order.map((i, k) => {
-          const cls = i === current ? "cur" : resting(i) ? "rest" : isDone(i) ? "f-" + scoreClass(scoreOf(i)) : strict ? "locked" : "";
-          const tip = resting(i) ? ` · nghỉ đến ${fmtDay(st.due[i])}` : isDone(i) ? ` · ${scoreOf(i)}/10` : "";
-          return `<button class="${cls}" data-go="${i}" title="Câu ${k + 1}${tip}" aria-label="Câu ${k + 1}"></button>`;
-        }).join("")}</div>
-        <span class="total">${total} điểm</span>
-        <button class="btn ghost sm${armed ? " armed" : ""}" id="reset">${icon("refresh")}<span>${armed ? "Bấm lần nữa để xoá" : "Làm lại"}</span></button>`;
+      const done = order.filter(isDone).length;
+      progEl.innerHTML = `<span class="bar"><span style="width:${N ? (done / N) * 100 : 0}%"></span></span>
+        <span class="cnt">${done}/${N}${icon("chevronDown")}</span>`;
     }
 
-    function renderList() {
-      if (!N) { listEl.innerHTML = '<p class="empty">Cụm này chưa có câu luyện dịch.</p>'; return; }
-      let html = "", n = 0;
-      levels.forEach(lv => {
-        html += `<div class="level"><b>${esc(lv || "—")}</b>${lv === "B1" ? "Cơ bản" : lv === "B2" ? "Nâng cao" : ""}</div>`;
-        order.filter(i => (S[i].level || "") === lv).forEach(i => { html += itemHtml(i, ++n); });
-      });
-      listEl.innerHTML = html;
-    }
+    const headHtml = (i, title) => `<div class="tr-q-head">${levelOf(i) ? `<span class="lvl">${esc(levelOf(i))}</span>` : ""}<h1>${title}</h1>${reviewTag(i)}</div>`;
 
-    function itemHtml(i, n) {
-      const s = S[i];
-      if (i === current) {
-        const retrying = strict && isGraded(i) && !passed(i); // đã chấm nhưng chưa đạt → đang làm lại
-        const hideAns = retrying && st.answers[i].trim();      // bắt đầu gõ lại thì che đáp án
-        const locked = reviewing && strict;                     // đúng rồi: khoá ô nhập, chờ Enter sang câu
-        return `
-        <div class="q-card cur${reviewing ? " reviewing" : ""}">
-          <div class="q-head"><span class="num">${n}.</span><p class="vi">${esc(s.vi)}${reviewTag(i)}</p>${reviewing || (!strict && isGraded(i)) ? chip(i, lastScore(i)) : ""}</div>
-          ${retrying ? `<div class="attempts">${triesHtml(i)} · chưa đúng 100% — <b>gõ lại cả câu</b> rồi nhấn Enter</div>`
-            : reviewing && strict && tries(i).length > 1 ? `<div class="attempts">${triesHtml(i)}</div>` : ""}
-          <textarea rows="1" spellcheck="false" autocomplete="off" autocapitalize="sentences"${locked ? " readonly" : ""}
-            placeholder="${retrying ? "Gõ lại cả câu…" : "Gõ câu tiếng Anh…"}" aria-label="Câu trả lời câu ${n}">${esc(st.answers[i])}</textarea>
-          <div class="live">
-            <span class="live-status" id="live"></span>
-            <span class="live-actions kbd-only">
-              ${reviewing ? `<span><kbd>Enter</kbd> sang câu tiếp${strict ? "" : " · sửa câu rồi Enter để chấm lại"}</span>` : "<span><kbd>Enter</kbd> chấm điểm</span>"}
-            </span>
-          </div>
-          ${!isGraded(i) ? "" : strict ? `
-            <div class="fb ${verdictCls(i)}${hideAns ? " ans-hidden" : ""}" data-peek>${feedbackHtml(i)}
-              <div class="peek-label">${icon("eye")} Đáp án đang ẩn — bấm để xem lại</div></div>` : `
-            <div class="fb ${verdictCls(i)}${isStale(i) ? " stale" : ""}">${feedbackHtml(i)}</div>
-            <div class="stale-hint"${isStale(i) ? "" : " hidden"}>Bạn đã sửa câu — nhấn Enter để chấm lại</div>`}
-          <div class="check-bar">
-            ${reviewing
-              ? `<button class="btn big primary" data-next>${nextUndone(i) === null ? "XEM KẾT QUẢ" : "TIẾP TỤC"}</button>`
-              : `${isGraded(i) ? "" : '<button class="btn big" data-skip>XEM ĐÁP ÁN</button>'}<button class="btn big primary" data-check>KIỂM TRA</button>`}
-          </div>
-        </div>`;
+    // Mỗi màn một câu: câu đang làm, hoặc câu đã làm đang xem lại
+    function renderStage() {
+      if (!N) { stageEl.innerHTML = '<p class="empty">Cụm này chưa có câu luyện dịch.</p>'; return; }
+      if (viewing !== null) {
+        const i = viewing;
+        stageEl.innerHTML = `
+          <div class="tr-q">
+            ${headHtml(i, `Câu ${numOf(i)} · xem lại`)}
+            <div class="tr-bubble">${esc(S[i].vi)}</div>
+            ${resting(i) ? `<div class="rest-note">${icon("check")} Nghỉ đến ${fmtDay(st.due[i])} · lần ${st.lvl[i] + 1}</div>` : ""}
+            ${tries(i).length > 1 ? `<div class="attempts">${triesHtml(i)}</div>` : ""}
+            <div class="fb ${verdictCls(i)}">${feedbackHtml(i)}</div>
+          </div>`;
+        return;
       }
-      if (isGraded(i) && i === lastGraded) return `
-        <div class="q-card open" data-go="${i}"${strict ? "" : ' title="Bấm để sửa câu này"'}>
-          <div class="q-head"><span class="num">${n}.</span><p class="vi">${esc(s.vi)}</p>${chip(i)}</div>
-          ${strict && tries(i).length > 1 ? `<div class="attempts">${triesHtml(i)}</div>` : ""}
-          ${feedbackHtml(i)}
+      if (current === null) { stageEl.innerHTML = ""; return; }
+      const i = current;
+      const retrying = strict && isGraded(i) && !passed(i); // đã chấm nhưng chưa đạt → đang làm lại
+      const locked = reviewing && strict;                     // đúng rồi: khoá ô nhập, chờ TIẾP TỤC
+      const hint = reviewing ? `<kbd>Enter</kbd> sang câu tiếp${strict ? "" : " · sửa câu rồi bấm KIỂM TRA để chấm lại"}`
+        : sheetOpen ? "<kbd>Enter</kbd> gõ lại" : "<kbd>Enter</kbd> chấm điểm";
+      stageEl.innerHTML = `
+        <div class="tr-q">
+          ${headHtml(i, "Dịch sang tiếng Anh")}
+          <div class="tr-bubble">${esc(S[i].vi)}</div>
+          <div class="tr-chunk">Dùng cụm <mark>${esc(label)}</mark></div>
+          ${strict && tries(i).length ? `<div class="attempts">${triesHtml(i)}${retrying ? " · chưa đúng 100% — <b>gõ lại cả câu</b>" : ""}</div>` : ""}
+          <textarea rows="3" spellcheck="false" autocomplete="off" autocapitalize="sentences"${locked ? " readonly" : ""}
+            placeholder="${retrying ? "Gõ lại cả câu…" : "Gõ câu tiếng Anh…"}" aria-label="Câu trả lời câu ${numOf(i)}">${esc(st.answers[i])}</textarea>
+          <div class="live"><span class="live-status" id="live"></span><span class="live-actions kbd-only"><span>${hint}</span></span></div>
         </div>`;
+    }
+
+    // Đáy màn hình: XEM ĐÁP ÁN / KIỂM TRA; chấm xong thì khung xanh / đỏ trượt lên kèm TIẾP TỤC / GÕ LẠI
+    function renderDock() {
+      if (viewing !== null) {
+        dockEl.hidden = false;
+        dockEl.className = "tr-dock";
+        dockEl.innerHTML = `<div class="dock-row"><button class="btn big" data-back>${icon("arrowLeft")} ${current === null ? "VỀ MÀN KẾT QUẢ" : "QUAY LẠI CÂU ĐANG LÀM"}</button></div>`;
+        return;
+      }
+      if (current === null || !N) { dockEl.hidden = true; dockEl.innerHTML = ""; return; }
+      dockEl.hidden = false;
+      const i = current, graded = isGraded(i);
+      let cls = "", html;
+      if (strict && graded && !passed(i)) {                       // chưa đúng → gõ lại
+        if (sheetOpen) {
+          cls = " sheet v-bad";
+          html = `<div class="sheet-body">${feedbackHtml(i)}</div>
+            <div class="dock-row"><button class="btn big danger-solid" data-retype>GÕ LẠI</button></div>`;
+        } else {
+          html = `<div class="dock-row"><button class="btn big" data-peek-open>${icon("eye")} ĐÁP ÁN</button><button class="btn big primary" data-check>KIỂM TRA</button></div>`;
+        }
+      } else if (graded && !isStale(i) && (reviewing || !strict)) { // chấm xong → xem kết quả rồi sang câu
+        cls = " sheet " + verdictCls(i);
+        html = `<div class="sheet-body">${feedbackHtml(i)}</div>
+          <div class="dock-row"><button class="btn big primary" data-next>${nextUndone(i) === null ? "XEM KẾT QUẢ" : "TIẾP TỤC"}</button></div>`;
+      } else {
+        html = `${graded ? '<p class="stale-hint">Bạn đã sửa câu — bấm KIỂM TRA để chấm lại</p>' : ""}
+          <div class="dock-row">${graded ? "" : '<button class="btn big" data-skip>XEM ĐÁP ÁN</button>'}<button class="btn big primary" data-check>KIỂM TRA</button></div>`;
+      }
+      dockEl.className = "tr-dock" + cls;
+      dockEl.innerHTML = html;
+    }
+
+    // Danh sách các câu (tấm trượt từ dưới lên)
+    function listRowHtml(i) {
+      const n = numOf(i), k = tries(i).length;
+      if (i === current) return `<button class="ls-row cur" data-go="${i}"><span class="ls-n">${n}</span>
+        <span class="ls-tx"><span class="t">${esc(S[i].vi)}</span></span><span class="ls-cur">ĐANG LÀM</span></button>`;
       if (isDone(i)) {
         const txt = st.gradedText[i];
-        const k = tries(i).length;
-        return `<button class="q-row${resting(i) ? " resting" : ""}" data-go="${i}"><span class="num">${n}</span>
-          <span class="tx${txt ? "" : " skip"}">${txt ? esc(txt) : "Đã xem đáp án"}</span>
-          ${resting(i) ? `<span class="rest-tag" title="Đúng ngay lần đầu ${st.lvl[i] + 1} lần — nghỉ ${restDays(st.lvl[i])} ngày">${icon("check")} Nghỉ đến ${fmtDay(st.due[i])} · lần ${st.lvl[i] + 1}</span>` : ""}
-          ${strict && k > 1 ? `<span class="tries" title="Số lần làm">${k} lần</span>` : ""}${chip(i)}</button>`;
+        const sub = resting(i) ? `<small class="ok">Nghỉ đến ${fmtDay(st.due[i])} · lần ${st.lvl[i] + 1}</small>`
+          : strict && k > 1 ? `<small class="mid">Làm ${k} lần mới đúng${st.due[i] ? ` · ôn lại ${fmtDay(st.due[i])}` : ""}</small>` : "";
+        return `<button class="ls-row done" data-go="${i}"><span class="ls-n">${icon("check")}</span>
+          <span class="ls-tx"><span class="t">${txt ? esc(txt) : "Đã xem đáp án"}</span>${sub}</span>${chip(i)}</button>`;
       }
-      return `<button class="q-row todo${strict ? " locked" : ""}" data-go="${i}"><span class="num">${n}</span><span class="tx">${esc(s.vi)}</span>${reviewTag(i)}</button>`;
+      return `<button class="ls-row todo${strict ? " locked" : ""}" data-go="${i}"><span class="ls-n">${n}</span>
+        <span class="ls-tx"><span class="t">${esc(S[i].vi)}</span></span>${st.review[i] ? '<span class="tag-review">Ôn lại</span>' : strict ? icon("lock") : ""}</button>`;
+    }
+    function renderListSheet() {
+      listOv.hidden = !listOpen;
+      document.body.classList.toggle("no-scroll", listOpen);
+      if (!listOpen) { listOv.innerHTML = ""; return; }
+      const done = order.filter(isDone).length;
+      listOv.innerHTML = `
+        <div class="list-sheet" role="dialog" aria-modal="true" aria-label="Danh sách các câu">
+          <div class="grabber"></div>
+          <div class="ls-head"><div><b>${N} câu · ${esc(pretty(c.chunk))}</b><small>${done}/${N} xong · bấm câu đã làm để xem lại đáp án</small></div>
+            <button class="icon-btn" data-close-list aria-label="Đóng">${icon("x")}</button></div>
+          <div class="ls-body">${levels.map(lv => `
+            <div class="level"><b>${esc(lv || "—")}</b>${lv === "B1" ? "Cơ bản" : lv === "B2" ? "Nâng cao" : ""}</div>
+            ${order.filter(i => levelOf(i) === lv).map(listRowHtml).join("")}`).join("")}</div>
+        </div>`;
     }
 
     const verdictCls = i => (lastScore(i) >= 10 ? "v-good" : "v-bad");
@@ -1085,7 +1139,7 @@
     }
 
     function renderResult() {
-      if (!allDone() || reviewing) { resultEl.innerHTML = ""; resultEl.dataset.key = ""; homeOnEnter = false; return; }
+      if (!allDone() || reviewing || current !== null || viewing !== null) { resultEl.innerHTML = ""; resultEl.dataset.key = ""; homeOnEnter = false; return; }
       const pct = pctNow();
       const perfect = pct === 100;
       const wrong = order.filter(i => (strict ? scoreOf(i) < 10 : scoreOf(i) < 8));
@@ -1130,7 +1184,7 @@
             <span class="r-goal-bar">${Array.from({ length: Math.min(goal, 10) }, (_, k) => `<i class="${k < Math.min(goalDone, 10) ? "on" : ""}"></i>`).join("")}</span>
           </div>
           <div class="actions">
-            ${wrong.length ? `<button class="btn big primary" id="retry-wrong">${icon("refresh")} LÀM LẠI ${wrong.length} CÂU ${strict ? "CHƯA ĐÚNG NGAY" : "CHƯA TỐT"}</button>` : ""}
+            ${wrong.length ? `<button class="btn big primary" id="retry-wrong">${icon("refresh")} LÀM LẠI ${wrong.length} CÂU ${strict ? "SAI" : "CHƯA TỐT"}</button>` : ""}
             <button class="btn big${wrong.length ? "" : " primary"}" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">VỀ TRANG CHỦ</button>
             <a class="btn big" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} SANG PHẦN NGHE</a>
           </div>
@@ -1140,17 +1194,12 @@
     }
 
     function updateLive(error) {
-      const el = listEl.querySelector("#live");
+      const el = stageEl.querySelector("#live");
       if (!el || current === null) return;
       const v = st.answers[current].trim();
-      if (reviewing && !error && (strict || !isStale(current))) {
-        const sc = lastScore(current);
-        el.className = "live-status " + (sc === 10 ? "ok" : sc >= 5 ? "no" : "err");
-        el.innerHTML = sc === 10 ? `${icon("circleCheck")} Đúng rồi!` : `${icon("alert")} Được ${sc}/10 — xem phần sửa bên dưới`;
-        return;
-      }
+      if (reviewing && !error && (strict || !isStale(current))) { el.className = "live-status"; el.innerHTML = ""; return; }
       if (error) { el.className = "live-status err"; el.innerHTML = `${icon("alert")} ${error}`; }
-      else if (!v) { el.className = "live-status"; el.innerHTML = `Nhớ dùng cụm <mark>${esc(label)}</mark>`; }
+      else if (!v) { el.className = "live-status"; el.innerHTML = ""; }
       else if (m.test(v)) { el.className = "live-status ok"; el.innerHTML = `${icon("circleCheck")} Đã có cụm “${esc(label)}”`; }
       else { el.className = "live-status no"; el.innerHTML = `${icon("alert")} Chưa thấy cụm “${esc(label)}”`; }
     }
@@ -1171,7 +1220,7 @@
       if (i === null) return;
       const text = skip ? "" : st.answers[i].trim();
       if (!skip && !text) {
-        const ta = listEl.querySelector("textarea");
+        const ta = stageEl.querySelector("textarea");
         ta.classList.remove("shake"); void ta.offsetWidth; ta.classList.add("shake");
         updateLive("Gõ câu tiếng Anh trước đã — hoặc bấm “Xem đáp án”");
         return;
@@ -1184,31 +1233,33 @@
       st.hist[i] = tries(i).concat(results[i].score);
       logDay(e => { e.graded++; e.scoreSum += results[i].score; });
       markToday();
+      viewing = null;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); // điện thoại: hạ bàn phím để thấy khung kết quả
       if (strict && results[i].score < 10) {
         st.answers[i] = "";                 // chưa đúng 100% → ở lại, gõ lại từ đầu
         save();
-        lastGraded = null;
-        render({ focus: true, scroll: true });
+        sheetOpen = true;                   // khung đỏ: xem đáp án rồi bấm GÕ LẠI
+        render();
         return;
       }
       setDue(i);
       save();
       reviewing = true;                     // dừng lại ở câu này để xem kết quả
       announce = announce || !wasDone;
-      lastGraded = null;
-      render({ focus: true });
+      render();
     }
 
     // Enter lần 2 (hoặc nút "Câu tiếp"): sang câu chưa làm tiếp theo
     function advance() {
       const i = current;
       reviewing = false;
-      lastGraded = i;
+      sheetOpen = false;
+      viewing = null;
       current = nextUndone(i);
       checkComplete(announce);
       announce = false;
-      render({ focus: current !== null, scroll: current !== null });
-      if (current === null) resultEl.scrollIntoView({ behavior: "smooth", block: "end" });
+      render({ focus: current !== null });
+      window.scrollTo(0, 0);
     }
 
     function stopReview() { reviewing = false; announce = false; }
@@ -1220,23 +1271,25 @@
       save();
       stopReview();
       newBest = false;
-      lastGraded = null;
+      viewing = null; sheetOpen = false;
       current = wrong.length ? wrong[0] : null;
-      render({ focus: true, scroll: true });
+      render({ focus: !touch });
+      window.scrollTo(0, 0);
     }
 
-    function reset() {
-      if (!armed) {
-        armed = setTimeout(() => { armed = null; renderProgress(); }, 3000);
-        renderProgress();
-        return;
-      }
-      clearTimeout(armed); armed = null;
+    async function resetAll() {
+      const ok = await confirmDialog({
+        title: "Làm lại cả bài?",
+        body: `Xoá kết quả cả ${N} câu của cụm này để dịch lại từ đầu.`,
+        okText: "Làm lại", danger: true
+      });
+      if (!ok) return;
       for (let i = 0; i < N; i++) clearSentence(i);
       save();
       stopReview();
-      newBest = false; lastGraded = null; current = N ? order[0] : null;
-      render({ focus: true, scroll: true });
+      newBest = false; viewing = null; sheetOpen = false; current = N ? order[0] : null;
+      render({ focus: !touch });
+      window.scrollTo(0, 0);
     }
 
     // ---------- Sự kiện ----------
@@ -1245,16 +1298,40 @@
       store.set("strict", strict);
       stopReview();
       current = firstUndone();
-      lastGraded = null;
+      viewing = null; sheetOpen = false;
       newBest = false;
-      render({ focus: current !== null, scroll: current !== null });
+      render({ focus: current !== null && !touch });
       toast(strict ? "Đã bật: câu chưa đúng 100% phải làm lại" : "Đã tắt chế độ luyện đến khi đúng");
     });
+    pane.querySelector("#auto-say").addEventListener("change", e => {
+      autoSay = e.target.checked;
+      store.set("auto-say", autoSay);
+      if (!autoSay) Speech.cancel();
+    });
+    const retype = () => { sheetOpen = false; render({ focus: true }); };
+    const closeList = () => { listOpen = false; renderListSheet(); };
+    function openMenu(btn) {
+      PopMenu.open(btn, [
+        { act: "listen", icon: "headphones", label: "Nghe & nhắc lại" },
+        { act: "cue", icon: "bulb", label: "Gợi ý & nhắc lại" },
+        { act: "say", icon: "volume", label: "Nghe phát âm cụm" },
+        { act: "edit", icon: "edit", label: "Sửa cụm" },
+        { act: "reset", icon: "refresh", label: "Làm lại cả bài", danger: true }
+      ], act => {
+        const base = `#/c/${encodeURIComponent(c.id)}`;
+        if (act === "listen") location.hash = base + "/listen";
+        else if (act === "cue") location.hash = base + "/goi-y";
+        else if (act === "edit") location.hash = base + "/sua";
+        else if (act === "say") sayOnce(spokenChunk(c));
+        else if (act === "reset") resetAll();
+      }, `<b><mark>${esc(pretty(c.chunk))}</mark></b><span>${esc(c.meaning || "")}</span>`);
+    }
     pane.addEventListener("click", e => {
       const t = e.target;
       if (!t.closest("button, a, input, label") && !window.getSelection().isCollapsed) return; // đang bôi đen chữ
-      const peek = t.closest("[data-peek]");
-      if (peek && peek.classList.contains("ans-hidden")) { peek.classList.remove("ans-hidden"); return; }
+      if (t === listOv || t.closest("[data-close-list]")) return closeList();
+      if (t.closest("#open-list")) { listOpen = true; return renderListSheet(); }
+      if (t.closest("#tr-more")) return openMenu(t.closest("#tr-more"));
       const say = t.closest("[data-say]");
       if (say) return sayOnce(say.dataset.say);
       const self = t.closest("[data-self]");
@@ -1267,22 +1344,27 @@
       if (t.closest("[data-next]")) return advance();
       if (t.closest("[data-check]")) return gradeCurrent(false);
       if (t.closest("[data-skip]")) return gradeCurrent(true);
-      if (t.closest("#reset")) return reset();
+      if (t.closest("[data-retype]")) return retype();
+      if (t.closest("[data-peek-open]")) { sheetOpen = true; return render(); }
+      if (t.closest("[data-back]")) { viewing = null; render({ focus: current !== null && !touch }); window.scrollTo(0, 0); return; }
       if (t.closest("#retry-wrong")) return retryWrong();
       if (t.closest("#go-home-next")) { store.set("home-focus", "next"); location.hash = "#/"; return; }
       const go = t.closest("[data-go]");
-      if (!go || +go.dataset.go === current) return;
+      if (!go) return;
       const i = +go.dataset.go;
+      if (i === current) { viewing = null; listOpen = false; render({ focus: !touch }); return; }
       if (strict) {
-        if (!isDone(i)) { toast(reviewing ? "Nhấn Enter để sang câu tiếp" : "Làm đúng câu hiện tại trước đã"); return; }
-        lastGraded = lastGraded === i ? null : i; // chỉ mở ra xem lại, không làm lại
+        if (!isDone(i)) { toast(reviewing ? "Bấm TIẾP TỤC để sang câu tiếp" : "Làm đúng câu hiện tại trước đã"); return; }
+        viewing = i; listOpen = false;             // chỉ mở ra xem lại, không làm lại
         render();
+        window.scrollTo(0, 0);
         return;
       }
       stopReview();
       current = i;
-      lastGraded = null;
-      render({ focus: true, scroll: true });
+      viewing = null; listOpen = false; sheetOpen = false;
+      render({ focus: !touch });
+      window.scrollTo(0, 0);
     });
     pane.addEventListener("input", e => {
       if (e.target.tagName !== "TEXTAREA" || current === null) return;
@@ -1290,39 +1372,36 @@
       grow(e.target);
       save();
       updateLive();
-      if (strict) {
-        const fb = listEl.querySelector(".fb[data-peek]");
-        if (fb) fb.classList.toggle("ans-hidden", !!st.answers[current].trim()); // gõ lại thì che đáp án
-      } else {
-        const fb = listEl.querySelector(".fb"), hint = listEl.querySelector(".stale-hint");
-        if (fb) { fb.classList.toggle("stale", isStale(current)); hint.hidden = !isStale(current); }
-      }
+      if (sheetOpen) sheetOpen = false;
+      if (isGraded(current)) renderDock(); // sửa câu đã chấm → nút KIỂM TRA để chấm lại
     });
-    pane.querySelector("#auto-say").addEventListener("change", e => {
-      autoSay = e.target.checked;
-      store.set("auto-say", autoSay);
-      if (!autoSay) Speech.cancel();
-    });
-    // Màn kết quả 100/100: Enter = "Về trang chủ" (chờ 0,5 giây để lỡ bấm Enter 2 lần vẫn kịp xem kết quả)
+    // Phím tắt khi không gõ trong ô: Enter = TIẾP TỤC / GÕ LẠI / quay lại; màn 100/100: Enter = về trang chủ; Esc đóng danh sách
     const onDocKey = e => {
-      if (e.key !== "Enter" || e.isComposing || !homeOnEnter || Date.now() - resultReadyAt < 500) return;
-      if (/^(TEXTAREA|INPUT|SELECT|BUTTON|A)$/.test(e.target.tagName)) return;
-      e.preventDefault();
-      store.set("home-focus", "next");
-      location.hash = "#/";
+      if (e.key === "Escape" && listOpen) { e.preventDefault(); return closeList(); }
+      if (e.key !== "Enter" || e.isComposing || listOpen) return;
+      if (/^(TEXTAREA|INPUT|SELECT|BUTTON|A)$/.test(e.target.tagName) || document.querySelector(".dlg-overlay")) return;
+      if (viewing !== null) { e.preventDefault(); viewing = null; render({ focus: current !== null }); return; }
+      if (current !== null && sheetOpen) { e.preventDefault(); return retype(); }
+      if (current !== null && reviewing) { e.preventDefault(); return advance(); }
+      if (current === null && homeOnEnter && Date.now() - resultReadyAt >= 500) { // chờ 0,5 giây để lỡ bấm Enter 2 lần vẫn kịp xem kết quả
+        e.preventDefault();
+        store.set("home-focus", "next");
+        location.hash = "#/";
+      }
     };
     document.addEventListener("keydown", onDocKey);
     pane.addEventListener("keydown", e => {
       if (e.target.tagName !== "TEXTAREA" || e.key !== "Enter" || e.isComposing) return;
       e.preventDefault();
+      if (sheetOpen) return retype();
       if (reviewing && (strict || !isStale(current))) advance(); // Enter lần 2 → sang câu tiếp
       else gradeCurrent(false);
     });
 
     Tracker.start("tr", c.id);
     refreshMarks = () => render();
-    cleanup = () => { clearTimeout(armed); Tracker.stop(); document.removeEventListener("keydown", onDocKey); };
-    render({ focus: current !== null });
+    cleanup = () => { Tracker.stop(); document.removeEventListener("keydown", onDocKey); document.body.classList.remove("no-scroll"); };
+    render({ focus: current !== null && !touch });
   }
 
   // =========================================================

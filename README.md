@@ -45,11 +45,13 @@ Rồi mở http://localhost:8765
 
 ## Phần 1 · Dịch Việt → Anh
 
-- Làm từng câu: câu đang làm được phóng to, câu đã làm thu gọn kèm điểm, câu chưa làm mờ đi. Thanh 10 đoạn phía trên tô màu theo điểm từng câu — bấm vào để nhảy tới câu đó.
+- **Mỗi màn một câu**: trên cùng là nút ✕ (về trang chủ), thanh tiến độ dày + “3/10 ▾” và nút **⋯**; dưới là nhãn B1/B2, câu tiếng Việt, chip **Dùng cụm …** và ô gõ to; nút **XEM ĐÁP ÁN / KIỂM TRA** cố định ở đáy màn hình.
+- Bấm **thanh tiến độ** → danh sách các câu (đã đúng ✓ / đang nghỉ đến ngày nào / làm mấy lần mới đúng / đang làm / chưa tới 🔒 / Ôn lại); bấm câu đã làm để **xem lại** đáp án.
+- Nút **⋯**: tên cụm + nghĩa, **Nghe & nhắc lại**, **Gợi ý & nhắc lại**, **Nghe phát âm cụm**, **Sửa cụm**, **Làm lại cả bài** (có hỏi lại).
 - Trong lúc gõ, dòng nhỏ dưới ô nhập báo **đã có / chưa thấy cụm chunk**.
 - **Enter** (hoặc nút to **KIỂM TRA**) → chấm điểm: khung **xanh “Tuyệt vời!”** khi đúng 10/10, khung **đỏ “Chưa đúng”** khi sai, và **dừng lại ở câu đó**; **Enter lần nữa** (hoặc nút **TIẾP TỤC**) mới sang câu tiếp. Câu cuối thì nút là **XEM KẾT QUẢ** — màn kết quả có vòng điểm, 3 ô Điểm / Đúng ngay / Thời gian, ngày ôn lại và thanh mục tiêu hôm nay. Màn kết quả có nút **Về trang chủ**: tự cuộn tới (và nháy viền) cụm đầu tiên chưa xong phần Dịch. Đạt **100/100** thì chỉ cần bấm **Enter** (đợi khoảng nửa giây sau khi màn kết quả hiện ra).
 - **Tự đọc câu đúng** (công tắc cạnh “Luyện đến khi đúng”, mặc định bật): mỗi lần Enter chấm câu — đúng hay sai — app đọc **câu đáp án đúng** (dòng “Sửa lại”) 1 lần, theo tốc độ / giọng đọc của Phần 2, để luyện nghe luôn. Không tính vào thanh Nghe.
-- **Luyện đến khi đúng** (công tắc đầu phần Dịch, mặc định bật): câu chưa được 10/10 thì ở lại — ô nhập được xoá, phần sửa lỗi hiện ra nhưng tự **mờ đi khi bạn bắt đầu gõ lại** (bấm để xem lại). Gõ lại đến khi đúng 100% mới sang câu tiếp; không nhảy tới câu chưa làm được.
+- **Luyện đến khi đúng** (công tắc đầu phần Dịch, mặc định bật): câu chưa được 10/10 thì ở lại — khung đỏ hiện phần sửa lỗi, bấm **GÕ LẠI** (hoặc Enter) để gõ lại từ đầu; cần xem lại thì bấm nút **ĐÁP ÁN**. Gõ lại đến khi đúng 100% mới sang câu tiếp; không nhảy tới câu chưa làm được.
   Mỗi câu ghi “Lần 1: 7/10 → Lần 3: 10/10”; tổng điểm tính theo **lần làm đầu tiên**, màn kết quả có thêm số câu đúng ngay lần đầu và số lần làm lại. Chế độ này không có nút “Câu của mình cũng đúng ý” — câu đúng mà app chưa nhận ra thì dùng **Từ tương đương**. Tắt công tắc để quay về cách cũ.
 - Phần sửa lỗi hiện 2 dòng:
   - **Bạn viết**: chỗ sai / thừa **in đậm đỏ**, chỗ thiếu từ hiện `__` đỏ.
