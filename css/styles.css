@@ -788,3 +788,7 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 .grid-sep b { font-weight: inherit; }
 .grid-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .grid-sep[hidden] { display: none; }
+
+/* Màn kết quả 100/100: gợi ý phím Enter trên nút chính (điện thoại không có phím Enter lúc này → ẩn) */
+.btn.primary kbd { margin-left: 4px; background: transparent; border-color: currentColor; color: inherit; opacity: .7; }
+@media (hover: none) { #go-home-next kbd { display: none; } }

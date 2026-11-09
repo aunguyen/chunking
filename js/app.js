@@ -912,10 +912,13 @@
     let reviewing = false;   // vừa chấm xong câu hiện tại: dừng lại xem kết quả, Enter lần nữa mới sang câu
     let announce = false;    // vừa làm xong cả bài → báo khi sang câu
 
+    let autoSay = store.get("auto-say", true); // chấm xong thì đọc câu đáp án đúng
+    let resultReadyAt = 0, homeOnEnter = false;  // màn kết quả 100/100: Enter → về trang chủ
     pane.innerHTML = `
       <div class="mode-row">
         <label class="switch"><input type="checkbox" id="strict"${strict ? " checked" : ""}> <b>Luyện đến khi đúng</b></label>
         <span class="hint">Câu chưa đúng 100% phải gõ lại mới qua câu tiếp</span>
+        <label class="switch" title="Mỗi lần bấm Enter chấm câu, app đọc câu đáp án đúng để luyện nghe luôn"><input type="checkbox" id="auto-say"${autoSay ? " checked" : ""}> <b>Tự đọc câu đúng</b></label>
       </div>
       <div class="progress" id="progress"></div><div id="list"></div><div id="result"></div>`;
     const progEl = pane.querySelector("#progress");
@@ -1039,13 +1042,16 @@
     }
 
     function renderResult() {
-      if (!allDone() || reviewing) { resultEl.innerHTML = ""; resultEl.dataset.key = ""; return; }
+      if (!allDone() || reviewing) { resultEl.innerHTML = ""; resultEl.dataset.key = ""; homeOnEnter = false; return; }
       const pct = pctNow();
+      const perfect = pct === 100;
       const wrong = order.filter(i => (strict ? scoreOf(i) < 10 : scoreOf(i) < 8));
       const retries = order.reduce((a, i) => a + Math.max(0, tries(i).length - 1), 0);
       const key = `${strict}|${pct}|${wrong.length}|${retries}|${newBest}`;
       if (resultEl.dataset.key === key) return; // tránh chạy lại hiệu ứng khi không đổi
       resultEl.dataset.key = key;
+      homeOnEnter = perfect;
+      resultReadyAt = Date.now();
       const byLevel = levels.map(lv => {
         const idx = order.filter(i => (S[i].level || "") === lv);
         return `${esc(lv || "—")} <b>${idx.reduce((a, i) => a + scoreOf(i), 0)}</b>/${idx.length * 10}`;
@@ -1068,8 +1074,8 @@
               : `${byLevel} · Dùng đúng cụm <b>${used}</b>/${N} câu`} · Cao nhất <b>${store.get("best:" + c.id, pct)}</b></div>
             <div class="actions">
               ${wrong.length ? `<button class="btn primary" id="retry-wrong">${icon("refresh")} Làm lại ${wrong.length} câu ${strict ? "chưa đúng ngay lần đầu" : "chưa tốt"}</button>` : ""}
-              <a class="btn${wrong.length ? "" : " primary"}" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} Sang phần Nghe</a>
-              <button class="btn" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">${icon("arrowLeft")} Về trang chủ</button>
+              <a class="btn${wrong.length || perfect ? "" : " primary"}" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} Sang phần Nghe</a>
+              <button class="btn${perfect ? " primary" : ""}" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">${icon("arrowLeft")} Về trang chủ${perfect ? ' <kbd>Enter</kbd>' : ""}</button>
             </div>
           </div>
         </div>`;
@@ -1116,6 +1122,7 @@
       st.gradedText[i] = text;
       st.overrides[i] = false;
       results[i] = Grader.grade(text, S[i].en, m);
+      if (autoSay && results[i].best) sayOnce(results[i].best); // đúng hay sai đều đọc câu đáp án để luyện nghe
       st.hist[i] = tries(i).concat(results[i].score);
       logDay(e => { e.graded++; e.scoreSum += results[i].score; });
       markToday();
@@ -1232,6 +1239,20 @@
         if (fb) { fb.classList.toggle("stale", isStale(current)); hint.hidden = !isStale(current); }
       }
     });
+    pane.querySelector("#auto-say").addEventListener("change", e => {
+      autoSay = e.target.checked;
+      store.set("auto-say", autoSay);
+      if (!autoSay) Speech.cancel();
+    });
+    // Màn kết quả 100/100: Enter = "Về trang chủ" (chờ 0,5 giây để lỡ bấm Enter 2 lần vẫn kịp xem kết quả)
+    const onDocKey = e => {
+      if (e.key !== "Enter" || e.isComposing || !homeOnEnter || Date.now() - resultReadyAt < 500) return;
+      if (/^(TEXTAREA|INPUT|SELECT|BUTTON|A)$/.test(e.target.tagName)) return;
+      e.preventDefault();
+      store.set("home-focus", "next");
+      location.hash = "#/";
+    };
+    document.addEventListener("keydown", onDocKey);
     pane.addEventListener("keydown", e => {
       if (e.target.tagName !== "TEXTAREA" || e.key !== "Enter" || e.isComposing) return;
       e.preventDefault();
@@ -1241,7 +1262,7 @@
 
     Tracker.start("tr", c.id);
     refreshMarks = () => render();
-    cleanup = () => { clearTimeout(armed); Tracker.stop(); };
+    cleanup = () => { clearTimeout(armed); Tracker.stop(); document.removeEventListener("keydown", onDocKey); };
     render({ focus: current !== null });
   }
 
