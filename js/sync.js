@@ -52,6 +52,7 @@
         ["tr", "ls", "graded", "scoreSum", "heard"].forEach(x => { m[x] = Math.max(e[x] || 0, f[x] || 0); });
         m.c = Object.assign({}, f.c);
         Object.entries(e.c || {}).forEach(([id, ms]) => { m.c[id] = Math.max(ms, m.c[id] || 0); });
+        if (e.p || f.p) m.p = Object.assign({}, f.p, e.p); // cụm đạt 100/100 trong ngày: gộp hai máy
         out[day] = m;
       });
       return out;

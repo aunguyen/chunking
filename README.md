@@ -34,16 +34,20 @@ Rồi mở http://localhost:8765
 
 ## Trang chủ
 
-- Thống kê: số cụm đã thành thạo, điểm dịch trung bình, số câu đã nghe – nhắc lại, **chuỗi ngày luyện liên tiếp**.
-- Lọc theo trạng thái: **Chưa học / Đang luyện / Thành thạo** (thành thạo = thanh **Dịch** xong 100% và đã nghe hết ít nhất 1 lượt ở Phần 2; có câu đến hạn ôn thì tạm về Đang luyện), tìm kiếm cụm.
-- Cụm đang học dở được viền xanh với nút **Luyện tiếp**.
+- Giao diện vui tươi: nút to nổi khối, thẻ viền dày, font **Nunito**; tự đổi theo chế độ sáng / tối của máy.
+- Hàng trên cùng: **chuỗi ngày** (ngọn lửa), **mục tiêu hôm nay** (vd. 3/5) và nút tài khoản.
+- **Mục tiêu hôm nay** = số cụm đạt **100/100** phần Dịch trong ngày (mặc định 5; mỗi cụm tính 1 lần / ngày, kể cả lần ôn lại). Mỗi cụm đạt tô xanh 1 ô. Đổi số cụm ở trang **Tổng kết**.
+- Thẻ **Đang học dở**: cụm vừa luyện (hoặc cụm đầu tiên chưa xong) với nút **LUYỆN TIẾP**.
+- Mỗi cụm chỉ còn thanh **Dịch** (phần Nghe vẫn có trong cụm, để nghe lại lúc làm việc).
+- Lọc theo trạng thái: **Chưa học / Đang luyện / Thành thạo** (thành thạo = thanh **Dịch** xong 100%; có câu đến hạn ôn thì tạm về Đang luyện), tìm kiếm cụm.
+- Thanh điều hướng dưới: **Học · Tổng kết · Thêm cụm · Tương đương**.
 - Cụm đã **dịch xong 100%** được xếp xuống cuối danh sách, dưới dòng "Đã dịch xong · N cụm". Khi có câu đến hạn ôn, cụm tự quay lên trên.
 
 ## Phần 1 · Dịch Việt → Anh
 
 - Làm từng câu: câu đang làm được phóng to, câu đã làm thu gọn kèm điểm, câu chưa làm mờ đi. Thanh 10 đoạn phía trên tô màu theo điểm từng câu — bấm vào để nhảy tới câu đó.
 - Trong lúc gõ, dòng nhỏ dưới ô nhập báo **đã có / chưa thấy cụm chunk**.
-- **Enter** → chấm điểm và **dừng lại ở câu đó** để xem kết quả; **Enter lần nữa** (hoặc nút **Câu tiếp →**) mới sang câu tiếp. Câu cuối thì nút là **Xem kết quả**. Màn kết quả có nút **Về trang chủ**: tự cuộn tới (và nháy viền) cụm đầu tiên chưa xong phần Dịch. Đạt **100/100** thì chỉ cần bấm **Enter** (đợi khoảng nửa giây sau khi màn kết quả hiện ra).
+- **Enter** (hoặc nút to **KIỂM TRA**) → chấm điểm: khung **xanh “Tuyệt vời!”** khi đúng 10/10, khung **đỏ “Chưa đúng”** khi sai, và **dừng lại ở câu đó**; **Enter lần nữa** (hoặc nút **TIẾP TỤC**) mới sang câu tiếp. Câu cuối thì nút là **XEM KẾT QUẢ** — màn kết quả có vòng điểm, 3 ô Điểm / Đúng ngay / Thời gian, ngày ôn lại và thanh mục tiêu hôm nay. Màn kết quả có nút **Về trang chủ**: tự cuộn tới (và nháy viền) cụm đầu tiên chưa xong phần Dịch. Đạt **100/100** thì chỉ cần bấm **Enter** (đợi khoảng nửa giây sau khi màn kết quả hiện ra).
 - **Tự đọc câu đúng** (công tắc cạnh “Luyện đến khi đúng”, mặc định bật): mỗi lần Enter chấm câu — đúng hay sai — app đọc **câu đáp án đúng** (dòng “Sửa lại”) 1 lần, theo tốc độ / giọng đọc của Phần 2, để luyện nghe luôn. Không tính vào thanh Nghe.
 - **Luyện đến khi đúng** (công tắc đầu phần Dịch, mặc định bật): câu chưa được 10/10 thì ở lại — ô nhập được xoá, phần sửa lỗi hiện ra nhưng tự **mờ đi khi bạn bắt đầu gõ lại** (bấm để xem lại). Gõ lại đến khi đúng 100% mới sang câu tiếp; không nhảy tới câu chưa làm được.
   Mỗi câu ghi “Lần 1: 7/10 → Lần 3: 10/10”; tổng điểm tính theo **lần làm đầu tiên**, màn kết quả có thêm số câu đúng ngay lần đầu và số lần làm lại. Chế độ này không có nút “Câu của mình cũng đúng ý” — câu đúng mà app chưa nhận ra thì dùng **Từ tương đương**. Tắt công tắc để quay về cách cũ.
@@ -108,7 +112,7 @@ Bấm **Tổng kết** ở trang chủ:
 - **Hôm nay**: số phút đã học (chia Dịch / Nghe), số câu dịch, điểm trung bình, số câu nghe – nhắc lại.
 - Tổng thời gian, số ngày đã học, chuỗi ngày hiện tại và dài nhất — chọn xem **7 ngày / 30 ngày / Tất cả**.
 - Biểu đồ thời gian học mỗi ngày (rê chuột vào cột để xem số phút, có nút **Xem dạng bảng**), bảng theo từng cụm.
-- **Lịch học**: 3 tháng gần nhất, mỗi khung 1 tháng (T2 → CN). Chọn **mục tiêu mỗi ngày** (30p · 1g · 1g30 · 2g · 3g · tự nhập); mỗi ô dâng màu từ dưới lên theo % mục tiêu, đạt đủ thì **xanh đậm**.
+- **Lịch học**: 3 tháng gần nhất, mỗi khung 1 tháng (T2 → CN). Chọn **mục tiêu mỗi ngày** = số cụm đạt 100/100 (1 · 3 · 5 · 8 · 10 · tự nhập); mỗi ô dâng màu từ dưới lên theo số cụm đã đạt, đủ mục tiêu thì **xanh đậm**.
 - **Cách tính giờ:** chỉ đếm khi đang ở phần Dịch / Nghe, trang đang hiện trên màn hình, và có thao tác trong 60 giây gần nhất hoặc đang phát audio. Để máy đó đi làm việc khác thì không bị tính.
 
 ## Thêm / sửa / xoá cụm ngay trên web

@@ -55,6 +55,10 @@
     equal: '<path d="M5 10h14M5 14h14"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/>',
     logout: '<path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h11m-3-3 3 3-3 3"/>',
+    home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".6" fill="currentColor"/>',
+    crown: '<path d="M3 8l4.5 4 4.5-7 4.5 7L21 8l-2 11H5z" fill="currentColor"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.5 1-2.1A6 6 0 0 0 12 3z"/>'
@@ -483,6 +487,10 @@
   // ---------- Nhật ký mỗi ngày ----------
   // stats:log = { "YYYY-MM-DD": { tr: ms dịch, ls: ms nghe, graded: số câu chấm, scoreSum, heard: số câu nghe xong, c: { chunkId: ms } } }
   const EMPTY_DAY = { tr: 0, ls: 0, graded: 0, scoreSum: 0, heard: 0, c: {} };
+  // Mục tiêu mỗi ngày = số cụm đạt 100/100 (mỗi cụm tính 1 lần / ngày); log[ngày].p = { id: 1 }
+  const goalTarget = () => store.get("goal-chunks", 5);
+  const perfectCount = e => Object.keys((e && e.p) || {}).length;
+  const perfectToday = () => perfectCount(store.get("stats:log", {})[today()]);
   function logDay(fn) {
     const log = store.get("stats:log", {});
     const k = today();
@@ -579,9 +587,9 @@
     const strict = store.get("strict", true);
     const doneCount = tr.gradedText.filter((g, i) => g !== null && (!strict || !tr.hist[i].length || tr.hist[i].includes(10))).length;
     const ls = listenState(c);
-    // Thành thạo = thanh Dịch xong 100% + đã nghe xong ít nhất 1 lượt (Phần 2); có câu đến hạn ôn thì tạm về "Đang luyện"
+    // Thành thạo = thanh Dịch xong 100%; có câu đến hạn ôn thì tạm về "Đang luyện"
     const total = (c.sentences || []).length;
-    const status = total > 0 && doneCount >= total && ls.rounds >= 1 ? "ok"
+    const status = total > 0 && doneCount >= total ? "ok"
       : best != null || graded || ls.rounds || ls.done.length ? "mid" : "new";
     return { c, best, graded, doneCount, total, ls, items: playlistFor(c).length, status, dueCount, restUntil };
   }
@@ -591,12 +599,28 @@
   // =========================================================
   let cleanup = null;
 
+  // Thanh điều hướng dưới: chỉ hiện ở các trang chính (không hiện lúc đang luyện một cụm)
+  const TABBAR = [["", "home", "Học"], ["tong-ket", "chart", "Tổng kết"], ["them", "plus", "Thêm cụm"], ["tuong-duong", "equal", "Tương đương"]];
+  const tabbar = document.createElement("nav");
+  tabbar.className = "tabbar";
+  tabbar.setAttribute("aria-label", "Điều hướng chính");
+  document.body.appendChild(tabbar);
+  function updateTabbar(page) {
+    const show = TABBAR.some(t => t[0] === page);
+    tabbar.hidden = !show;
+    document.body.classList.toggle("has-tabbar", show);
+    if (show) tabbar.innerHTML = TABBAR.map(([k, ic, l]) =>
+      `<a href="#/${k}" class="${k === page ? "on" : ""}"${k === page ? ' aria-current="page"' : ""}>${icon(ic)}<span>${l}</span></a>`).join("");
+  }
+
   function route() {
     if (cleanup) { cleanup(); cleanup = null; }
     refreshMarks = null;
     SelPop.hide();
     Speech.cancel();
     const parts = location.hash.replace(/^#\/?/, "").split("/");
+    const known = ["tong-ket", "tuong-duong", "them"].includes(parts[0]);
+    updateTabbar(known ? parts[0] : parts[0] === "c" && CHUNKS.some(c => c.id === decodeURIComponent(parts[1] || "")) ? "c" : "");
     if (parts[0] === "tong-ket") return renderSummary();
     if (parts[0] === "tuong-duong") return renderEquiv();
     if (parts[0] === "them") return renderEditor(null);
@@ -621,36 +645,40 @@
     const all = CHUNKS.map(chunkInfo);
     const infos = all.filter(x => !trDone(x)).concat(all.filter(trDone)); // cụm đã dịch xong 100% xuống cuối
     const firstDone = infos.findIndex(trDone);
-    const bests = infos.filter(x => x.best != null).map(x => x.best);
-    const avg = bests.length ? Math.round(bests.reduce((a, b) => a + b, 0) / bests.length) : null;
     const days = streak();
     const last = store.get("stats:last", null);
     const count = k => (k === "all" ? infos.length : infos.filter(x => x.status === k).length);
     let filter = store.get("home-filter", "all");
+    const target = goalTarget(), doneToday = perfectToday();
+    // Thẻ "Đang học dở": cụm vừa luyện (nếu chưa xong), không thì cụm đầu tiên chưa xong phần Dịch
+    const lastInfo = infos.find(x => x.c.id === last);
+    const hero = lastInfo && !trDone(lastInfo) && lastInfo.status !== "new" ? lastInfo : infos.find(x => !trDone(x)) || null;
 
     app.innerHTML = `
-      <header class="home-top">
+      <header class="topbar">
         <div class="brand"><span class="brand-mark">${icon("logo")}</span>Chunking</div>
-        <div class="home-actions">
-          <span class="streak ${days ? "" : "off"}">${icon("flame")} ${days ? `${days} ngày liên tiếp` : "Luyện hôm nay để bắt đầu chuỗi ngày"}</span>
-          <span class="home-btns">
-            <a class="btn sm" href="#/tong-ket">${icon("chart")} Tổng kết</a>
-            <a class="btn sm primary" href="#/them">${icon("plus")} Thêm cụm</a>
-          </span>
+        <div class="top-stats">
+          <span class="tstat streak${days ? "" : " off"}" title="${days ? `Chuỗi ${days} ngày liên tiếp` : "Luyện hôm nay để bắt đầu chuỗi ngày"}">${icon("flame")}<b>${days}</b></span>
+          <span class="tstat goal${doneToday >= target ? " met" : ""}" title="Hôm nay: ${doneToday}/${target} cụm đạt 100/100">${icon("target")}<b>${doneToday}/${target}</b></span>
+          <span id="acct-slot">${acctHtml()}</span>
         </div>
-        <span id="acct-slot">${acctHtml()}</span>
       </header>
-      <section class="stats">
-        <div class="stat"><small>Cụm đã thành thạo</small><b>${infos.filter(x => x.status === "ok").length}</b><span> / ${infos.length}</span></div>
-        <div class="stat"><small>Điểm dịch trung bình</small><b>${avg == null ? "—" : avg}</b></div>
-        <div class="stat"><small>Câu đã nghe – nhắc lại</small><b>${store.get("stats:heard", 0)}</b></div>
-      </section>
+      ${goalCardHtml(doneToday, target)}
+      ${hero ? `
+      <section class="hero-card">
+        <span class="hc-label">${hero.dueCount ? "ĐẾN HẠN ÔN" : hero.c.id === last ? "ĐANG HỌC DỞ" : "HỌC TIẾP"}</span>
+        <div class="hc-phrase">${esc(pretty(hero.c.chunk))}</div>
+        <div class="hc-meaning">${esc(hero.c.meaning || "")}</div>
+        ${trMeterHtml(hero)}
+        <a class="btn big primary" href="#/c/${encodeURIComponent(hero.c.id)}/translate">${hero.doneCount ? "LUYỆN TIẾP" : "BẮT ĐẦU"} ${icon("arrowRight")}</a>
+      </section>` : ""}
       ${pendingBoxHtml()}
+      <div class="sec-head"><h2>Cụm của bạn</h2><span>${count("ok")}/${infos.length} thành thạo</span></div>
       <div class="toolbar">
         ${FILTERS.map(([k, l]) => `<button class="filter" data-f="${k}">${l}<span class="n">${count(k)}</span></button>`).join("")}
         <label class="search">${icon("search")}<input type="search" placeholder="Tìm cụm…" aria-label="Tìm cụm"></label>
       </div>
-      <div class="grid">${infos.map((x, i) => (i === firstDone ? '<div class="grid-sep"><span>Đã dịch xong · <b></b> cụm</span></div>' : "") + cardHtml(x, last)).join("")}</div>
+      <div class="grid">${infos.map((x, i) => (i === firstDone ? '<div class="grid-sep"><span>Đã dịch xong · <b></b> cụm</span></div>' : "") + cardHtml(x, i)).join("")}</div>
       <p class="empty" hidden>${CHUNKS.length ? "Không có cụm nào khớp." : "Chưa có cụm nào — bấm “Thêm cụm” để bắt đầu."}</p>
       <footer class="home-foot">
         <span>${acctOn() ? "Đã đăng nhập: dữ liệu tự đồng bộ với tài khoản." : "Chưa đăng nhập: cụm tự thêm, điểm và thời gian học chỉ lưu trong trình duyệt này."}</span>
@@ -690,7 +718,7 @@
       if (sep) { sep.hidden = !shownDone; sep.querySelector("b").textContent = shownDone; }
       app.querySelector(".empty").hidden = shown > 0;
     }
-    app.querySelector(".home-top").addEventListener("click", e => {
+    app.querySelector(".topbar").addEventListener("click", e => {
       if (e.target.closest("#acct-login")) return openLogin("in");
       const m = e.target.closest("#acct-menu");
       if (m) openAccountMenu(m);
@@ -756,40 +784,51 @@
       </section>`;
   }
 
-  function cardHtml(x, last) {
-    const { c } = x;
-    const isLast = last === c.id && x.status !== "new";
-    // Thanh tiến độ: xám khi đang làm, đủ 100% mới chuyển xanh
-    const trFull = x.total > 0 && x.doneCount >= x.total;
-    const tr = trFull ? { label: `Xong ✓${x.best != null ? ` · ${x.best} điểm` : ""}`, w: 100, cls: "f-good" }
-      : x.doneCount ? { label: `${x.doneCount}/${x.total} câu`, w: (x.doneCount / x.total) * 100, cls: "" }
-      : { label: "—", w: 0, cls: "" };
-    const heard = x.ls.done.length;
-    const green = x.ls.greenUntil && x.ls.greenUntil > today(); // nghe xong 1 lượt → xanh tới ngày nghe lại
-    const ls = green ? { label: `Xong ✓ · ${x.ls.rounds} lượt · nghe lại ${fmtDay(x.ls.greenUntil)}`, w: 100, cls: "f-good" }
-      : heard ? { label: `${heard}/${x.items} câu${x.ls.rounds ? ` · ${x.ls.rounds} lượt` : ""}`, w: (heard / x.items) * 100, cls: "" }
-      : { label: x.ls.rounds ? `0/${x.items} câu · ${x.ls.rounds} lượt` : "—", w: 0, cls: "" };
+  // Thanh tiến độ phần Dịch: xanh dương khi đang làm, đủ 100% mới chuyển xanh lá
+  function trMeterHtml(x) {
+    const full = x.total > 0 && x.doneCount >= x.total;
+    const tr = full ? { label: `Xong${x.best != null ? ` · ${x.best} điểm` : ""}`, w: 100, cls: "f-good" }
+      : x.doneCount ? { label: `${x.doneCount}/${x.total} câu`, w: (x.doneCount / x.total) * 100, cls: "f-acc" }
+      : { label: "Chưa làm", w: 0, cls: "" };
+    return `<span class="meter${full ? " full" : ""}"><span class="meter-label"><span>Dịch</span><span>${tr.label}</span></span>
+      <span class="track"><span class="${tr.cls}" style="width:${tr.w}%"></span></span></span>`;
+  }
+
+  // Ô mục tiêu hôm nay: mỗi cụm đạt 100/100 tô 1 ô
+  function goalCardHtml(done, target) {
+    const n = Math.min(target, 10);
+    const filled = target <= 10 ? Math.min(done, n) : Math.round((Math.min(done, target) / target) * n);
+    const note = done >= target ? (done > target ? `Vượt mục tiêu — đã có ${done} cụm đạt 100/100 hôm nay` : "Xong mục tiêu hôm nay — giỏi lắm!")
+      : `Đạt <b>100/100</b> thêm ${target - done} cụm nữa là xong mục tiêu`;
     return `
-      <a class="chunk-card${isLast ? " continue" : ""}" href="#/c/${encodeURIComponent(c.id)}"
+      <section class="goal-card${done >= target ? " met" : ""}">
+        <div class="gc-head"><b>Mục tiêu hôm nay</b><span>${done} / ${target} cụm</span></div>
+        <div class="gc-blocks" style="grid-template-columns:repeat(${n},minmax(0,1fr))">${Array.from({ length: n }, (_, k) =>
+          k < filled ? `<span class="on">${icon("check")}</span>` : "<span></span>").join("")}</div>
+        <p class="gc-note">${note}</p>
+      </section>`;
+  }
+
+  const BADGES = ["blue", "purple", "teal", "pink", "orange"];
+  function cardHtml(x, idx) {
+    const { c } = x;
+    const trFull = x.total > 0 && x.doneCount >= x.total;
+    const badge = x.status === "ok" ? "gold" : BADGES[idx % BADGES.length];
+    return `
+      <a class="chunk-card" href="#/c/${encodeURIComponent(c.id)}"
          data-status="${x.status}"${trFull ? ' data-trdone="1"' : ""} data-q="${esc((c.chunk + " " + (c.meaning || "")).toLowerCase())}">
-        <div class="card-top">
-          <span class="status ${STATUS[x.status][0]}">${STATUS[x.status][1]}</span>
-          ${isLast ? `<span class="cont">Luyện tiếp ${icon("arrowRight")}</span>` : ""}
-          <button class="card-menu" data-menu="${esc(c.id)}" title="Sửa / xoá cụm" aria-label="Sửa hoặc xoá cụm">${icon("dots")}</button>
-        </div>
-        <div class="phrase">${esc(pretty(c.chunk))}</div>
-        <p class="meaning">${esc(c.meaning || "")}</p>
-        ${x.dueCount ? `<div class="due-tag">${icon("refresh")} ${x.dueCount} câu đến hạn ôn</div>`
-          : x.restUntil ? `<div class="due-tag ok">${icon("check")} Đã thuộc — ôn lại ${fmtDay(x.restUntil)}</div>` : ""}
-        ${x.ls.relisten ? `<div class="due-tag">${icon("headphones")} Đến hạn nghe lại</div>` : ""}
-        <div class="meter">
-          <div class="meter-label"><span>Dịch</span><span>${tr.label}</span></div>
-          <div class="track"><div class="${tr.cls}" style="width:${tr.w}%"></div></div>
-        </div>
-        <div class="meter">
-          <div class="meter-label"><span>Nghe</span><span>${ls.label}</span></div>
-          <div class="track"><div class="${ls.cls}" style="width:${ls.w}%"></div></div>
-        </div>
+        <span class="badge b-${badge}">${icon(x.status === "ok" ? "crown" : "translate")}</span>
+        <span class="cc-body">
+          <span class="card-top">
+            <span class="status ${STATUS[x.status][0]}">${STATUS[x.status][1]}</span>
+            ${x.dueCount ? `<span class="tag t-due">${icon("refresh")} ${x.dueCount} câu đến hạn ôn</span>`
+              : x.restUntil ? `<span class="tag t-rest">Ôn lại ${ddmm(parseDay(x.restUntil))}</span>` : ""}
+            <button class="card-menu" data-menu="${esc(c.id)}" title="Sửa / xoá cụm" aria-label="Sửa hoặc xoá cụm">${icon("dots")}</button>
+          </span>
+          <span class="phrase">${esc(pretty(c.chunk))}</span>
+          <span class="meaning">${esc(c.meaning || "")}</span>
+          ${trMeterHtml(x)}
+        </span>
       </a>`;
   }
 
@@ -981,19 +1020,20 @@
             placeholder="${retrying ? "Gõ lại cả câu…" : "Gõ câu tiếng Anh…"}" aria-label="Câu trả lời câu ${n}">${esc(st.answers[i])}</textarea>
           <div class="live">
             <span class="live-status" id="live"></span>
-            <span class="live-actions">
-              ${reviewing
-                ? `<span><kbd>Enter</kbd> sang câu tiếp${strict ? "" : " · sửa câu rồi Enter để chấm lại"}</span>
-                   <button class="btn sm primary" data-next>${nextUndone(i) === null ? "Xem kết quả" : "Câu tiếp"} ${icon("arrowRight")}</button>`
-                : `${isGraded(i) ? "" : '<button class="link" data-skip>Xem đáp án</button>'}
-                   <span><kbd>Enter</kbd> chấm điểm</span>`}
+            <span class="live-actions kbd-only">
+              ${reviewing ? `<span><kbd>Enter</kbd> sang câu tiếp${strict ? "" : " · sửa câu rồi Enter để chấm lại"}</span>` : "<span><kbd>Enter</kbd> chấm điểm</span>"}
             </span>
           </div>
           ${!isGraded(i) ? "" : strict ? `
-            <div class="fb${hideAns ? " ans-hidden" : ""}" data-peek>${feedbackHtml(i)}
+            <div class="fb ${verdictCls(i)}${hideAns ? " ans-hidden" : ""}" data-peek>${feedbackHtml(i)}
               <div class="peek-label">${icon("eye")} Đáp án đang ẩn — bấm để xem lại</div></div>` : `
-            <div class="fb${isStale(i) ? " stale" : ""}">${feedbackHtml(i)}</div>
+            <div class="fb ${verdictCls(i)}${isStale(i) ? " stale" : ""}">${feedbackHtml(i)}</div>
             <div class="stale-hint"${isStale(i) ? "" : " hidden"}>Bạn đã sửa câu — nhấn Enter để chấm lại</div>`}
+          <div class="check-bar">
+            ${reviewing
+              ? `<button class="btn big primary" data-next>${nextUndone(i) === null ? "XEM KẾT QUẢ" : "TIẾP TỤC"}</button>`
+              : `${isGraded(i) ? "" : '<button class="btn big" data-skip>XEM ĐÁP ÁN</button>'}<button class="btn big primary" data-check>KIỂM TRA</button>`}
+          </div>
         </div>`;
       }
       if (isGraded(i) && i === lastGraded) return `
@@ -1013,6 +1053,7 @@
       return `<button class="q-row todo${strict ? " locked" : ""}" data-go="${i}"><span class="num">${n}</span><span class="tx">${esc(s.vi)}</span>${reviewTag(i)}</button>`;
     }
 
+    const verdictCls = i => (lastScore(i) >= 10 ? "v-good" : "v-bad");
     function feedbackHtml(i) {
       const r = results[i], s = S[i], sc = lastScore(i); // phần sửa luôn theo lần chấm gần nhất
       let top, lines;
@@ -1034,7 +1075,9 @@
       const actions = r.empty || sc >= 10 ? "" : `<div class="fb-actions">
           ${strict ? "" : `<button class="link" data-self="${i}">Câu của mình cũng đúng ý → tính 10/10</button>`}
           <a class="link muted-link" href="#/tuong-duong">${icon("equal")} Thêm từ tương đương</a></div>`;
+      const verdict = sc >= 10 ? `${icon("circleCheck")} Tuyệt vời!` : r.empty ? `${icon("x")} Đáp án` : `${icon("x")} Chưa đúng`;
       return `
+        <div class="fb-verdict">${verdict}<span class="fb-score">${sc}/10</span></div>
         <div class="fb-top">${top}</div>
         <div class="fix-lines">${lines}</div>
         ${others.length ? `<div class="alts"><div class="lb">Cách khác</div>${others.map(a => `<div><span data-en>${highlight(c, a)}</span>${sayBtn(a)}</div>`).join("")}</div>` : ""}
@@ -1060,6 +1103,9 @@
       const firstTry = order.filter(i => tries(i)[0] === 10).length;
       const title = pct >= 90 ? "Xuất sắc!" : pct >= 75 ? "Tốt lắm!" : pct >= 50 ? "Khá ổn" : "Cần luyện thêm";
       const ring = pct >= 80 ? "st-good" : pct >= 50 ? "st-mid-c" : "st-bad";
+      const dues = order.map(i => st.due[i]).filter(Boolean).sort();
+      const chunkMs = ((store.get("stats:log", {})[today()] || {}).c || {})[c.id] || 0;
+      const goalDone = perfectToday(), goal = goalTarget();
       resultEl.innerHTML = `
         <div class="result">
           <div class="ring-wrap">
@@ -1067,16 +1113,26 @@
               <circle class="prog-c ${ring}" cx="50" cy="50" r="44" pathLength="100" style="stroke-dashoffset:100"/></svg>
             <div class="center"><b>${pct}</b><small>/ 100</small></div>
           </div>
-          <div>
-            <h2>${title}${newBest ? '<span class="new-best">Kỷ lục mới</span>' : ""}</h2>
-            <div class="meta">${strict
-              ? `Điểm lần đầu: ${byLevel} · Đúng ngay lần đầu <b>${firstTry}</b>/${N} câu · Làm lại <b>${retries}</b> lần`
-              : `${byLevel} · Dùng đúng cụm <b>${used}</b>/${N} câu`} · Cao nhất <b>${store.get("best:" + c.id, pct)}</b></div>
-            <div class="actions">
-              ${wrong.length ? `<button class="btn primary" id="retry-wrong">${icon("refresh")} Làm lại ${wrong.length} câu ${strict ? "chưa đúng ngay lần đầu" : "chưa tốt"}</button>` : ""}
-              <a class="btn${wrong.length || perfect ? "" : " primary"}" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} Sang phần Nghe</a>
-              <button class="btn${perfect ? " primary" : ""}" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">${icon("arrowLeft")} Về trang chủ${perfect ? ' <kbd>Enter</kbd>' : ""}</button>
-            </div>
+          <h2${pct >= 80 ? "" : ' class="mid"'}>${title}${newBest ? '<span class="new-best">Kỷ lục mới</span>' : ""}</h2>
+          <p class="r-sub">Bạn đã dịch xong cụm <b>${esc(pretty(c.chunk))}</b></p>
+          <div class="r-tiles">
+            <div class="r-tile t-green"><span>ĐIỂM</span><b>${pct}</b></div>
+            <div class="r-tile t-blue"><span>${strict ? "ĐÚNG NGAY" : "DÙNG ĐÚNG CỤM"}</span><b>${strict ? firstTry : used}/${N}</b></div>
+            <div class="r-tile t-orange"><span>THỜI GIAN</span><b>${chunkMs ? fmtDur(chunkMs, true) : "—"}</b></div>
+          </div>
+          <div class="r-row">
+            <span class="r-ic">${icon("calendar")}</span>
+            <span><b class="r-title">${dues.length ? `Ôn lại từ ${fmtDay(dues[0])}` : "Chưa có lịch ôn"}</b>
+              <small>${strict ? `Điểm lần đầu: ${byLevel} · làm lại ${retries} lần` : `${byLevel} · cao nhất ${store.get("best:" + c.id, pct)}`}</small></span>
+          </div>
+          <div class="r-goal${goalDone >= goal ? " met" : ""}">
+            <span class="r-goal-head"><b>Mục tiêu hôm nay</b><span>${goalDone} / ${goal} cụm</span></span>
+            <span class="r-goal-bar">${Array.from({ length: Math.min(goal, 10) }, (_, k) => `<i class="${k < Math.min(goalDone, 10) ? "on" : ""}"></i>`).join("")}</span>
+          </div>
+          <div class="actions">
+            ${wrong.length ? `<button class="btn big primary" id="retry-wrong">${icon("refresh")} LÀM LẠI ${wrong.length} CÂU ${strict ? "CHƯA ĐÚNG NGAY" : "CHƯA TỐT"}</button>` : ""}
+            <button class="btn big${wrong.length ? "" : " primary"}" id="go-home-next" title="Về trang chủ, tới cụm đầu tiên chưa xong phần Dịch">VỀ TRANG CHỦ</button>
+            <a class="btn big" href="#/c/${encodeURIComponent(c.id)}/listen">${icon("headphones")} SANG PHẦN NGHE</a>
           </div>
         </div>`;
       const circle = resultEl.querySelector(".prog-c");
@@ -1105,6 +1161,8 @@
       const prev = store.get("best:" + c.id, null);
       newBest = prev != null && pct > prev;
       if (prev == null || pct > prev) store.set("best:" + c.id, pct);
+      const todayLog = store.get("stats:log", {})[today()] || {};
+      if (pct === 100 && !(todayLog.p || {})[c.id]) logDay(e => { e.p = Object.assign({}, e.p, { [c.id]: 1 }); }); // tính vào mục tiêu hôm nay
       if (announce) toast(`Hoàn thành ${N} câu — ${pct}/100 điểm`);
     }
 
@@ -1207,6 +1265,7 @@
         return;
       }
       if (t.closest("[data-next]")) return advance();
+      if (t.closest("[data-check]")) return gradeCurrent(false);
       if (t.closest("[data-skip]")) return gradeCurrent(true);
       if (t.closest("#reset")) return reset();
       if (t.closest("#retry-wrong")) return retryWrong();
@@ -1701,15 +1760,15 @@
     });
     function saveGoal() {
       const v = parseInt(body.querySelector("#goal-input").value, 10);
-      if (!(v >= 5 && v <= 720)) return toast("Nhập từ 5 đến 720 phút");
-      store.set("daily-goal", v);
+      if (!(v >= 1 && v <= 50)) return toast("Nhập từ 1 đến 50 cụm");
+      store.set("goal-chunks", v);
       draw();
     }
     body.addEventListener("keydown", e => { if (e.target.id === "goal-input" && e.key === "Enter") saveGoal(); });
     body.addEventListener("click", e => {
       const g = e.target.closest("[data-goal]");
       if (g) {
-        if (g.dataset.goal !== "custom") { store.set("daily-goal", +g.dataset.goal); return draw(); }
+        if (g.dataset.goal !== "custom") { store.set("goal-chunks", +g.dataset.goal); return draw(); }
         const box = body.querySelector("#goal-custom");
         box.hidden = !box.hidden;
         if (!box.hidden) body.querySelector("#goal-input").select();
@@ -1769,6 +1828,7 @@
               <div class="legend"><span><i class="sw s-tr"></i>Dịch ${fmtDur(t.tr)}</span><span><i class="sw s-ls"></i>Nghe ${fmtDur(t.ls)}</span></div>`
               : '<p class="hint" style="margin:0">Mở một cụm và luyện — thời gian sẽ tự được tính.</p>'}
             <div class="today-kv">
+              <span><b>${perfectCount(t)}</b>/${goalTarget()} cụm đạt 100/100</span>
               <span><b>${t.graded}</b> câu dịch</span>
               <span>điểm TB <b>${t.graded ? (t.scoreSum / t.graded).toFixed(1) : "—"}</b>/10</span>
               <span><b>${t.heard}</b> câu nghe – nhắc lại</span>
@@ -1824,10 +1884,10 @@
         </section>`;
     }
 
-    // Lịch học theo tháng: mỗi ô dâng màu từ đáy lên theo % mục tiêu mỗi ngày; đạt đủ thì xanh đậm
-    const GOALS = [[30, "30p"], [60, "1g"], [90, "1g30"], [120, "2g"], [180, "3g"]];
+    // Lịch học theo tháng: mỗi ô dâng màu từ đáy lên theo số cụm đạt 100/100 so với mục tiêu; đạt đủ thì xanh đậm
+    const GOALS = [1, 3, 5, 8, 10];
     function calendarHtml() {
-      const goal = store.get("daily-goal", 120); // phút
+      const goal = goalTarget(); // số cụm đạt 100/100 mỗi ngày
       const now = new Date(), todayKey = today();
       const frames = [2, 1, 0].map(back => {
         const first = new Date(now.getFullYear(), now.getMonth() - back, 1);
@@ -1838,27 +1898,27 @@
         for (let d = 1; d <= days; d++) {
           const dt = new Date(y, mo, d), k = today(dt);
           if (k > todayKey) { cells += `<div class="cal-c future"><b>${d}</b></div>`; continue; }
-          const ms = dayOf(k).tr + dayOf(k).ls, min = ms / 60000;
-          total += ms;
-          const pct = Math.round((min / goal) * 100);
-          cells += `<div class="cal-c${min >= goal ? " full" : ""}${k === todayKey ? " is-today" : ""}" tabindex="0"
-            data-tip="<b>${WEEKDAY[dt.getDay()]}, ${ddmm(dt)}</b><br>${ms ? `${fmtDur(ms)} / ${fmtDur(goal * 60000)} (${pct}%)` : "Không học"}">
+          const ms = dayOf(k).tr + dayOf(k).ls, n = perfectCount(dayOf(k));
+          total += n;
+          const pct = Math.round((n / goal) * 100);
+          cells += `<div class="cal-c${n >= goal ? " full" : ""}${k === todayKey ? " is-today" : ""}" tabindex="0"
+            data-tip="<b>${WEEKDAY[dt.getDay()]}, ${ddmm(dt)}</b><br>${n || ms ? `${n}/${goal} cụm đạt 100/100${ms ? ` · học ${fmtDur(ms)}` : ""}` : "Không học"}">
             <div class="fill" style="height:${Math.min(100, pct)}%"></div><b>${d}</b></div>`;
         }
-        return `<div class="cal-month"><div class="cal-head"><b>Tháng ${mo + 1}</b><span>${total ? fmtDur(total) : "—"}</span></div>
+        return `<div class="cal-month"><div class="cal-head"><b>Tháng ${mo + 1}</b><span>${total ? `${total} cụm 100/100` : "—"}</span></div>
           <div class="cal-grid">${["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(w => `<span class="cal-dn">${w}</span>`).join("")}${cells}</div></div>`;
       }).join("");
-      const custom = !GOALS.some(([v]) => v === goal);
+      const custom = !GOALS.includes(goal);
       return `
         <section class="box">
           <div class="box-head"><h2>Lịch học</h2>
             <div class="goal-pick"><span class="hint">Mục tiêu mỗi ngày</span>
-              <div class="opt-group">${GOALS.map(([v, l]) => `<button data-goal="${v}" class="${v === goal ? "on" : ""}">${l}</button>`).join("")}<button data-goal="custom" class="${custom ? "on" : ""}">${custom ? fmtDur(goal * 60000, true) : "Tự nhập"}</button></div>
-              <span class="goal-custom" id="goal-custom" hidden><input type="number" min="5" max="720" step="5" value="${goal}" id="goal-input" aria-label="Số phút mỗi ngày"> phút <button class="btn sm" id="goal-save">Lưu</button></span>
+              <div class="opt-group">${GOALS.map(v => `<button data-goal="${v}" class="${v === goal ? "on" : ""}">${v} cụm</button>`).join("")}<button data-goal="custom" class="${custom ? "on" : ""}">${custom ? `${goal} cụm` : "Tự nhập"}</button></div>
+              <span class="goal-custom" id="goal-custom" hidden><input type="number" min="1" max="50" step="1" value="${goal}" id="goal-input" aria-label="Số cụm đạt 100/100 mỗi ngày"> cụm <button class="btn sm" id="goal-save">Lưu</button></span>
             </div>
           </div>
           <div class="cal-months tip-box">${frames}</div>
-          <p class="hint" style="margin:10px 0 0">Ô tô dần từ dưới lên theo % mục tiêu · ô <b>xanh đậm</b> là đã đạt ${fmtDur(goal * 60000)} · chạm / rê vào ô để xem số phút.</p>
+          <p class="hint" style="margin:10px 0 0">Mục tiêu: mỗi ngày <b>${goal} cụm đạt 100/100</b> (mỗi cụm tính 1 lần / ngày) · ô tô dần từ dưới lên · ô <b>xanh đậm</b> là đã đạt · chạm / rê vào ô để xem chi tiết.</p>
         </section>`;
     }
 
@@ -2337,9 +2397,9 @@
   }
   function acctHtml() {
     const s = window.Sync ? Sync.info() : { state: "off" };
-    if (!acctOn()) return `<button class="btn sm" id="acct-login">${icon("user")} Đăng nhập</button>`;
-    const name = (s.email || "").split("@")[0] || "Tài khoản";
-    return `<button class="btn sm acct" id="acct-menu" data-menu="acct" title="${esc(s.email)} · ${SYNC_TEXT[s.state] || ""}"><span class="sync-dot s-${s.state}"></span>${esc(name)}</button>`;
+    if (!acctOn()) return `<button class="btn sm" id="acct-login" aria-label="Đăng nhập">${icon("user")}<span class="lbl">Đăng nhập</span></button>`;
+    const name = (s.email || "").split("@")[0] || "?";
+    return `<button class="avatar" id="acct-menu" data-menu="acct" title="${esc(s.email)} · ${SYNC_TEXT[s.state] || ""}" aria-label="Tài khoản ${esc(s.email)} — ${SYNC_TEXT[s.state] || ""}">${esc(name.slice(0, 2))}<span class="sync-dot s-${s.state}"></span></button>`;
   }
 
   function openAccountMenu(anchor) {
